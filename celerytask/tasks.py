@@ -217,14 +217,32 @@ def run_api_refresh():
                         for api_key_pair in api_key_pairs:
                             print 'Running on ' + api_key_pair.api_id + ':' + api_key_pair.api_key
                             if EveApiManager.api_key_is_valid(api_key_pair.api_id, api_key_pair.api_key):
-                                # Update characters
-                                characters = EveApiManager.get_characters_from_api(api_key_pair.api_id,
-                                                                                   api_key_pair.api_key)
-                                EveManager.update_characters_from_list(characters)
-                                valid_key = True
+                                #check to ensure API key meets min spec
+                                still_valid = True
+                                if authserviceinfo.is_blue:
+                                    if settings.BLUE_API_ACCOUNT:
+                                        if not EveApiManager.check_api_is_type_account(api_key_pair.api_id, api_key_pair.api_key):
+                                            still_valid = False
+                                    if not EveApiManager.check_blue_api_is_full(api_key_pair.api_id, api_key_pair.api_key):
+                                            still_valid = False
+                                else:
+                                    if settings.MEMBER_API_ACCOUNT:
+                                        if not EveApiManager.check_api_is_type_account(api_key_pair.api_id, api_key_pair.api_key):
+                                            still_valid = False
+                                    if not EveApiManager.check_api_is_full(api_key_pair.api_id, api_key_pair.api_key):
+                                            still_valid = False
+                                if still_valid is not True:
+                                    EveManager.delete_characters_by_api_id(api_key_pair.api_id, user.id)
+                                    EveManager.delete_api_key_pair(api_key_pair.api_id, user.id)
+                                else:                                    
+                                    # Update characters
+                                    characters = EveApiManager.get_characters_from_api(api_key_pair.api_id,
+                                                                                       api_key_pair.api_key)
+                                    EveManager.update_characters_from_list(characters)
+                                    valid_key = True
                             else:
-                                EveManager.delete_characters_by_api_id(api_key_pair.api_id, user)
-                                EveManager.delete_api_key_pair(api_key_pair.api_id, api_key_pair.api_key)
+                                EveManager.delete_characters_by_api_id(api_key_pair.api_id, user.id)
+                                EveManager.delete_api_key_pair(api_key_pair.api_id, user.id)
 
                         if valid_key:
                             # Check our main character
@@ -310,10 +328,20 @@ def run_corp_update():
 
         if settings.IS_CORP:
             # Create the corp
-            corpinfo = EveApiManager.get_corporation_information(settings.CORP_ID)
-            if not EveManager.check_if_corporation_exists_by_id(corpinfo['id']):
-                EveManager.create_corporation_info(corpinfo['id'], corpinfo['name'], corpinfo['ticker'],
-                                                   corpinfo['members']['current'], False, None)
+            ownercorpinfo = EveApiManager.get_corporation_information(settings.CORP_ID)
+            if not EveManager.check_if_corporation_exists_by_id(ownercorpinfo['id']):
+                if ownercorpinfo['alliance']['id'] is None:
+                    EveManager.create_corporation_info(ownercorpinfo['id'], ownercorpinfo['name'], ownercorpinfo['ticker'],
+                                                       ownercorpinfo['members']['current'], False, None)
+                else:
+                    alliance_info = EveApiManager.get_alliance_information(ownercorpinfo['alliance']['id'])
+                    if not EveManager.check_if_alliance_exists_by_id(settings.ALLIANCE_ID):
+                        EveManager.create_alliance_info(settings.ALLIANCE_ID, alliance_info['name'], alliance_info['ticker'],
+                                                        alliance_info['executor_id'], alliance_info['member_count'], False)
+                    alliance = EveManager.get_alliance_info_by_id(ownercorpinfo['alliance']['id'])
+                    EveManager.create_corporation_info(ownercorpinfo['id'], ownercorpinfo['name'], ownercorpinfo['ticker'],
+                                                       ownercorpinfo['members']['current'], False, alliance)
+
         else:
             # Updated alliance info
             alliance_info = EveApiManager.get_alliance_information(settings.ALLIANCE_ID)
@@ -452,8 +480,8 @@ def run_corp_update():
         for all_alliance_info in EveManager.get_all_alliance_info():
             if settings.IS_CORP:
                 if all_alliance_info.is_blue is not True:
-                    if corpinfo.alliance is not None:
-                        if all_alliance_info.alliance_id != corpinfo.alliance.alliance_id:
+                    if ownercorpinfo['alliance']['id'] is not None:
+                        if int(all_alliance_info.alliance_id) != ownercorpinfo['alliance']['id']:
                             all_alliance_info.delete()
                     else:
                         all_alliance_info.delete()
