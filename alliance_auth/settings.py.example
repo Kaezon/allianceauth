@@ -1,4 +1,5 @@
 """
+vim: set filetype=python:
 Django settings for alliance_auth project.
 
 For more information on this file, see
@@ -6,6 +7,7 @@ https://docs.djangoproject.com/en/1.6/topics/settings/
 
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/1.6/ref/settings/
+
 """
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
@@ -56,6 +58,10 @@ INSTALLED_APPS = (
     'hrapplications',
     'timerboard',
     'srp',
+    'sigtracker',
+    'optimer',
+    'corputils',
+    'notifications',
 )
 
 MIDDLEWARE_CLASSES = (
@@ -121,6 +127,7 @@ TEMPLATE_CONTEXT_PROCESSORS = (
     'util.context_processors.domain_url',
     'util.context_processors.member_api_mask',
     'util.context_processors.blue_api_mask',
+    'notifications.context_processors.user_notification_count',
 )
 
 TEMPLATE_DIRS = (
@@ -152,6 +159,12 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/1.6/howto/static-files/
 STATIC_URL = '/static/'
 STATIC_ROOT = '/home/allianceserver/allianceauth/static/'
+
+# Cache directory for EveWho, no ending /
+# by default this becomes ~/<installdir>/alliance_auth/cache
+# This directory needs to be writable by the webserver
+EVEWHO_CACHE_DIR = '{}/cache'.format(BASE_DIR)
+
 
 #####################################################
 ##
@@ -186,14 +199,31 @@ EMAIL_HOST_USER = os.environ.get('AA_EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('AA_EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = 'True' == os.environ.get('AA_EMAIL_USE_TLS', 'True')
 
+####################
+# Front Page Links
+####################
+# KILLBOARD_URL - URL for your killboard. Blank to hide link
+# MEDIA_URL - URL for your media page (youtube etc). Blank to hide link
+# FORUM_URL - URL for your forums. Blank to hide link
+####################
+KILLBOARD_URL = os.environ.get('AA_KILLBOARD_URL', '')
+EXTERNAL_MEDIA_URL = os.environ.get('AA_EXTERNAL_MEDIA_URL', '')
+FORUM_URL = os.environ.get('AA_FORUM_URL', '')
+
 #########################
 # Default Group Settings
 #########################
 # DEFAULT_AUTH_GROUP - Default group members are put in
 # DEFAULT_BLUE_GROUP - Default group for blue members
+# MEMBER_CORP_GROUPS - Assign members to a group representing their main corp
+# BLUE_CORP_GROUPS - Assign blues to a group representing their main corp
 #########################
 DEFAULT_AUTH_GROUP = os.environ.get('AA_DEFAULT_ALLIANCE_GROUP', 'Member')
 DEFAULT_BLUE_GROUP = os.environ.get('AA_DEFAULT_BLUE_GROUP', 'Blue')
+MEMBER_CORP_GROUPS = 'True' == os.environ.get('AA_MEMBER_CORP_GROUPS', 'True')
+MEMBER_ALLIANCE_GROUPS = 'True' == os.environ.get('AA_MEMBER_ALLIANCE_GROUPS', 'False')
+BLUE_CORP_GROUPS = 'True' == os.environ.get('AA_BLUE_CORP_GROUPS', 'False')
+BLUE_ALLIANCE_GROUPS = 'True' == os.environ.get('AA_BLUE_ALLIANCE_GROUPS', 'False')
 
 #########################
 # Alliance Service Setup
@@ -202,12 +232,14 @@ DEFAULT_BLUE_GROUP = os.environ.get('AA_DEFAULT_BLUE_GROUP', 'Blue')
 # ENABLE_AUTH_JABBER - Enable jabber support in the auth for auth'd members
 # ENABLE_AUTH_MUMBLE - Enable mumble support in the auth for auth'd members
 # ENABLE_AUTH_IPBOARD - Enable IPBoard forum support in the auth for auth'd members
+# ENABLE_AUTH_DISCORD - Enable Discord support in the auth for auth'd members
 #########################
-ENABLE_AUTH_FORUM = 'True' == os.environ.get('AA_ENABLE_AUTH_FORUM', 'True')
-ENABLE_AUTH_JABBER = 'True' == os.environ.get('AA_ENABLE_AUTH_JABBER', 'True')
-ENABLE_AUTH_MUMBLE = 'True' == os.environ.get('AA_ENABLE_AUTH_MUMBLE', 'True')
+ENABLE_AUTH_FORUM = 'True' == os.environ.get('AA_ENABLE_AUTH_FORUM', 'False')
+ENABLE_AUTH_JABBER = 'True' == os.environ.get('AA_ENABLE_AUTH_JABBER', 'False')
+ENABLE_AUTH_MUMBLE = 'True' == os.environ.get('AA_ENABLE_AUTH_MUMBLE', 'False')
 ENABLE_AUTH_IPBOARD = 'True' == os.environ.get('AA_ENABLE_AUTH_IPBOARD', 'False')
 ENABLE_AUTH_TEAMSPEAK3 = 'True' == os.environ.get('AA_ENABLE_AUTH_TEAMSPEAK3', 'False')
+ENABLE_AUTH_DISCORD = 'True' == os.environ.get('AA_ENABLE_AUTH_DISCORD', 'False')
 
 #####################
 # Blue service Setup
@@ -217,13 +249,15 @@ ENABLE_AUTH_TEAMSPEAK3 = 'True' == os.environ.get('AA_ENABLE_AUTH_TEAMSPEAK3', '
 # ENABLE_BLUE_JABBER - Enable jabber support in the auth for blues
 # ENABLE_BLUE_MUMBLE - Enable mumble support in the auth for blues
 # ENABLE_BLUE_IPBOARD - Enable IPBoard forum support in the auth for blues
+# ENABLE_BLUE_DISCORD - Enable Discord support in the auth for blues
 #####################
 BLUE_STANDING = float(os.environ.get('AA_BLUE_STANDING', '5.0'))
 ENABLE_BLUE_FORUM = 'True' == os.environ.get('AA_ENABLE_BLUE_FORUM', 'False')
 ENABLE_BLUE_JABBER = 'True' == os.environ.get('AA_ENABLE_BLUE_JABBER', 'False')
-ENABLE_BLUE_MUMBLE = 'True' == os.environ.get('AA_ENABLE_BLUE_MUMBLE', 'True')
+ENABLE_BLUE_MUMBLE = 'True' == os.environ.get('AA_ENABLE_BLUE_MUMBLE', 'False')
 ENABLE_BLUE_IPBOARD = 'True' == os.environ.get('AA_ENABLE_BLUE_IPBOARD', 'False')
 ENABLE_BLUE_TEAMSPEAK3 = 'True' == os.environ.get('AA_ENABLE_BLUE_TEAMSPEAK3', 'False')
+ENABLE_BLUE_DISCORD = 'True' == os.environ.get('AA_ENABLE_BLUE_DISCORD', 'False')
 
 #########################
 # Corp Configuration
@@ -273,12 +307,10 @@ JACK_KNIFE_URL = os.environ.get('AA_JACK_KNIFE_URL', 'http://ridetheclown.com/ev
 #####################
 # Forum Configuration
 #####################
-# FORUM_URL - Forum url location
 # IPBOARD_ENDPOINT - Api endpoint if using ipboard
 # IPBOARD_APIKEY - Api key to interact with ipboard
 # IPBOARD_APIMODULE - Module for alliance auth *leave alone*
 #####################
-FORUM_URL = os.environ.get('AA_FORUM_URL', "http://yourdomain.com")
 IPBOARD_ENDPOINT = os.environ.get('AA_IPBOARD_ENDPOINT', 'yourdomain.com/interface/board/index.php')
 IPBOARD_APIKEY = os.environ.get('AA_IPBOARD_APIKEY', 'somekeyhere')
 IPBOARD_APIMODULE = 'aa'
@@ -298,7 +330,7 @@ IPBOARD_APIMODULE = 'aa'
 JABBER_URL = os.environ.get('AA_JABBER_URL', "yourdomain.com")
 JABBER_PORT = int(os.environ.get('AA_JABBER_PORT', '5223'))
 JABBER_SERVER = os.environ.get('AA_JABBER_SERVER', "yourdomain.com")
-OPENFIRE_ADDRESS = os.environ.get('AA_OPENFIRE_ADDRESS', "http://yourdomain.com:9090/")
+OPENFIRE_ADDRESS = os.environ.get('AA_OPENFIRE_ADDRESS', "http://yourdomain.com:9090")
 OPENFIRE_SECRET_KEY = os.environ.get('AA_OPENFIRE_SECRET_KEY', "somekey")
 BROADCAST_USER = os.environ.get('AA_BROADCAST_USER', "broadcast@") + JABBER_URL
 BROADCAST_USER_PASSWORD = os.environ.get('AA_BROADCAST_USER_PASSWORD', "somepassword")
@@ -330,3 +362,124 @@ TEAMSPEAK3_SERVERQUERY_USER = os.environ.get('AA_TEAMSPEAK3_SERVERQUERY_USER', '
 TEAMSPEAK3_SERVERQUERY_PASSWORD = os.environ.get('AA_TEAMSPEAK3_SERVERQUERY_PASSWORD', 'passwordhere')
 TEAMSPEAK3_VIRTUAL_SERVER = int(os.environ.get('AA_TEAMSPEAK3_VIRTUAL_SERVER', '1'))
 TEAMSPEAK3_PUBLIC_URL = os.environ.get('AA_TEAMSPEAK3_PUBLIC_URL', 'yourdomain.com')
+
+######################################
+# Discord Configuration
+######################################
+# DISCORD_SERVER_ID - ID of the server to manage
+# DISCORD_USER_EMAIL - email of the server management user
+# DISCORD_USER_PASSWORD - password of the server management user
+######################################
+DISCORD_SERVER_ID = os.environ.get('AA_DISCORD_SERVER_ID', '')
+DISCORD_USER_EMAIL = os.environ.get('AA_DISCORD_USER_EMAIL', '')
+DISCORD_USER_PASSWORD = os.environ.get('AA_DISCORD_USER_PASSWORD', '')
+
+#####################################
+# Logging Configuration
+#####################################
+# Set log_file and console level to desired state:
+# DEBUG - basically stack trace, explains every step
+# INFO - model creation, deletion, updates, etc
+# WARN - unexpected function outcomes that do not impact user
+# ERROR - unexcpeted function outcomes which prevent user from achieving desired outcome
+# EXCEPTION - something critical went wrong, unhandled
+#####################################
+# Recommended level for log_file is INFO, console is DEBUG
+# Change log level of individual apps below to narrow your debugging
+#####################################
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format' : "[%(asctime)s] %(levelname)s [%(name)s:%(lineno)s] %(message)s",
+            'datefmt' : "%d/%b/%Y %H:%M:%S"
+        },
+        'simple': {
+            'format': '%(levelname)s %(message)s'
+        },
+    },
+    'handlers': {
+        'log_file': {
+            'level': 'INFO',         # edit this line to change logging level to file
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(BASE_DIR,'log/allianceauth.log'),
+            'formatter': 'verbose',
+            'maxBytes': 1024*1024*5, # edit this line to change max log file size
+            'backupCount': 5,        # edit this line to change number of log backups
+        },
+        'console': {
+            'level': 'DEBUG',        # edit this line to change logging level to console
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'notifications': {           # creates notifications for users with logging_notifications permission
+            'level': 'ERROR',        # edit this line to change logging level to notifications
+            'class': 'notifications.handlers.NotificationHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'authentication': {
+            'handlers': ['log_file', 'console', 'notifications'],
+            'level': 'DEBUG',
+        },
+        'celerytask': {
+            'handlers': ['log_file', 'console', 'notifications'],
+            'level': 'DEBUG',
+        },
+        'eveonline': {
+            'handlers': ['log_file', 'console', 'notifications'],
+            'level': 'DEBUG',
+        },
+        'groupmanagement': {
+            'handlers': ['log_file', 'console', 'notifications'],
+            'level': 'DEBUG',
+        },
+        'hrapplications': {
+            'handlers': ['log_file', 'console', 'notifications'],
+            'level': 'DEBUG',
+        },
+        'portal': {
+            'handlers': ['log_file', 'console', 'notifications'],
+            'level': 'DEBUG',
+        },
+        'registration': {
+            'handlers': ['log_file', 'console', 'notifications'],
+            'level': 'DEBUG',
+        },
+        'services': {
+            'handlers': ['log_file', 'console', 'notifications'],
+            'level': 'DEBUG',
+        },
+        'srp': {
+            'handlers': ['log_file', 'console', 'notifications'],
+            'level': 'DEBUG',
+        },
+        'timerboard': {
+            'handlers': ['log_file', 'console', 'notifications'],
+            'level': 'DEBUG',
+        },
+        'sigtracker': {
+            'handlers': ['log_file', 'console', 'notifications'],
+            'level': 'DEBUG',
+        },
+        'optimer': {
+            'handlers': ['log_file', 'console', 'notifications'],
+            'level': 'DEBUG',
+        },
+        'corputils': {
+            'handlers': ['log_file', 'console', 'notifications'],
+            'level': 'DEBUG',
+        },
+        'util': {
+            'handlers': ['log_file', 'console', 'notifications'],
+            'level': 'DEBUG',
+        },
+        'django': {
+            'handlers': ['log_file', 'console', 'notifications'],
+            'level': 'ERROR',
+        },
+    }
+}
+

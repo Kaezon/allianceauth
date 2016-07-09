@@ -47,6 +47,15 @@
             <!-- /.navbar-header -->
 
             <ul class="nav navbar-top-links navbar-right">
+                {% if notifications %}
+                    <li class="nav-link active"><a href="{% url 'auth_notification_list' %}">
+                        <i class="fa fa-flag"></i></a>
+                    </li>
+                {% else %}
+                    <li class="nav-link"><a href="{% url 'auth_notification_list' %}">
+                        <i class="fa fa-flag-o"></i></a>
+                    </li>
+                {% endif %}
                 {% if user.is_authenticated %}
                     <li><a href="{% url 'auth_logout_user' %}">Logout</a></li>
                 {% else %}
@@ -106,7 +115,7 @@
                             </li>
                         {% endif %}
 
-                        {% if not perms.auth.member and not perms.auth.blue_member or perms.auth.human_resources %}
+                        {% if not perms.auth.member or perms.auth.human_resources %}
                             <li>
                                 <a {% ifequal request.path "/hr_application_management/" %}
                                     class="active" {% endifequal %}
@@ -115,10 +124,10 @@
                             </li>
                         {% endif %}
 
-                        {% if perms.auth.corp_stats %}
+                        {% if perms.auth.corp_apis or perms.auth.alliance_apis %}
                             <li>
-                                <a {% ifequal request.path "/corporation_stats" %} class="active" {% endifequal %}
-                                                                                   href="{% url 'auth_corp_stats' %}"><i
+                                <a {% ifequal request.path "/corputils/" %} class="active" {% endifequal %}
+                                                                                   href="{% url 'auth_corputils' %}"><i
                                         class="fa fa-share-alt fa-fw grayiconecolor"></i> Corporation Stats</a>
                             </li>
                         {% endif %}
@@ -137,11 +146,27 @@
                                                                                   href="{% url 'auth_fleet_fits' %}"><i
                                         class="fa fa-bolt fa-fw grayiconecolor"></i> Fleet Doctrines</a>
                             </li>
+			{% endif %}
+
+                        {% if  perms.auth.member or perms.auth.blue_member %}
+			      <li>
+                                <a {% ifequal request.path "/sigtracker" %} class="active" {% endifequal %}
+                                                                                  href="{% url 'auth_signature_view' %}"><i
+                                        class="fa fa-compass fa-fw grayiconecolor"></i> Signature Tracker</a>
+                            </li>
+			     
+                            <li>
+                                <a {% ifequal request.path "/optimer" %} class="active" {% endifequal %}
+                                                                                  href="{% url 'auth_optimer_view' %}"><i
+                                        class="fa fa-exclamation  fa-fw grayiconecolor"></i> Fleet Operations</a>
+                            </li>
+			
+
                             {% if perms.auth.timer_view %}
                                 <li>
                                     <a {% ifequal request.path "/timer_management" %} class="active" {% endifequal %}
                                                                                       href="{% url 'auth_timer_view' %}"><i
-                                            class="fa fa-clock-o fa-fw grayiconecolor"></i> OP Timers</a>
+                                            class="fa fa-clock-o fa-fw grayiconecolor"></i> Structure Timers</a>
                                 </li>
                             {% endif %}
 

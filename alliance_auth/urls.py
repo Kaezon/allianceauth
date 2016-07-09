@@ -37,11 +37,11 @@ urlpatterns = patterns('',
                        url(r'^add_api_key/', 'eveonline.views.add_api_key', name='auth_add_api_key'),
                        url(r'^api_key_management/', 'eveonline.views.api_key_management_view',
                            name='auth_api_key_management'),
+                       url(r'^refresh_api_pair/([0-9]+)/$', 'eveonline.views.user_refresh_api', name='auth_user_refresh_api'),
                        url(r'^delete_api_pair/(\w+)/$', 'eveonline.views.api_key_removal', name='auth_api_key_removal'),
                        url(r'^characters/', 'eveonline.views.characters_view', name='auth_characters'),
                        url(r'^main_character_change/(\w+)/$', 'eveonline.views.main_character_change',
                            name='auth_main_character_change'),
-                       url(r'^corporation_stats/$', 'eveonline.views.corp_stats_view', name='auth_corp_stats'),
 
                        # Group management
                        url(r'^groups/', 'groupmanagement.views.groups_view', name='auth_groups'),
@@ -95,6 +95,7 @@ urlpatterns = patterns('',
                        url(r'^deactivate_forum/$', 'services.views.deactivate_forum', name='auth_deactivate_forum'),
                        url(r'^reset_forum_password/$', 'services.views.reset_forum_password',
                            name='auth_reset_forum_password'),
+                       url(r'^set_forum_password/$', 'services.views.set_forum_password', name='auth_set_forum_password'),
 
 
                        # Jabber Service Control
@@ -102,12 +103,14 @@ urlpatterns = patterns('',
                        url(r'^deactivate_jabber/$', 'services.views.deactivate_jabber', name='auth_deactivate_jabber'),
                        url(r'^reset_jabber_password/$', 'services.views.reset_jabber_password',
                            name='auth_reset_jabber_password'),
+                       url(r'^set_jabber_password/$', 'services.views.set_jabber_password', name='auth_set_jabber_password'),
 
                        # Mumble service control
                        url(r'^activate_mumble/$', 'services.views.activate_mumble', name='auth_activate_mumble'),
                        url(r'^deactivate_mumble/$', 'services.views.deactivate_mumble', name='auth_deactivate_mumble'),
                        url(r'^reset_mumble_password/$', 'services.views.reset_mumble_password',
                            name='auth_reset_mumble_password'),
+                       url(r'^set_mumble_password/$', 'services.views.set_mumble_password', name='auth_set_mumble_password'),
 
                        # Ipboard service control
                        url(r'^activate_ipboard/$', 'services.views.activate_ipboard_forum',
@@ -116,6 +119,7 @@ urlpatterns = patterns('',
                            name='auth_deactivate_ipboard'),
                        url(r'^reset_ipboard_password/$', 'services.views.reset_ipboard_password',
                            name='auth_reset_ipboard_password'),
+                       url(r'^set_ipboard_password/$', 'services.views.set_ipboard_password', name='auth_set_ipboard_password'),
 
                        # Teamspeak3 service control
                        url(r'^activate_teamspeak3/$', 'services.views.activate_teamspeak3',
@@ -125,6 +129,11 @@ urlpatterns = patterns('',
                        url(r'reset_teamspeak3_perm/$', 'services.views.reset_teamspeak3_perm',
                            name='auth_reset_teamspeak3_perm'),
 
+                       # Discord Service Control
+                       url(r'^activate_discord/$', 'services.views.activate_discord', name='auth_activate_discord'),
+                       url(r'^deactivate_discord/$', 'services.views.deactivate_discord', name='auth_deactivate_discord'),
+                       url(r'^reset_discord/$', 'services.views.reset_discord', name='auth_reset_discord'),
+
                        # Tools
                        url(r'^tool/fleet_formatter_tool/$', 'services.views.fleet_formatter_view',
                            name='auth_fleet_format_tool_view'),
@@ -133,6 +142,7 @@ urlpatterns = patterns('',
                        url(r'^timers/$', 'timerboard.views.timer_view', name='auth_timer_view'),
                        url(r'^add_timer/$', 'timerboard.views.add_timer_view', name='auth_add_timer_view'),
                        url(r'^remove_timer/(\w+)', 'timerboard.views.remove_timer', name='auth_remove_timer'),
+                       url(r'^edit_timer/(\w+)$', 'timerboard.views.edit_timer', name='auth_edit_timer'),
 
                        # SRP URLS
                        url(r'^srp/$', 'srp.views.srp_management', name='auth_srp_management_view'),
@@ -153,7 +163,30 @@ urlpatterns = patterns('',
                        url(r'srp_request_reject/(\w+)', 'srp.views.srp_request_reject', name='auth_srp_request_reject'),
                        url(r'srp_request_amount_update/(\w+)', 'srp.views.srp_request_update_amount_view',
                            name="auth_srp_request_update_amount_view"),
-                       
-			# FLEET FITTINGS
-			url(r'^fits/$', 'services.views.fleet_fits', name='auth_fleet_fits'),
+
+                       #corputils
+                       url(r'^corputils/$', 'corputils.views.corp_member_view', name='auth_corputils'),
+                       url(r'^corputils/(?P<corpid>[0-9]+)/$', 'corputils.views.corp_member_view'),
+                       url(r'^corputils/search/$', 'corputils.views.corputils_search', name="auth_corputils_search"),
+                       url(r'^corputils/search/(?P<corpid>[0-9]+)/$', 'corputils.views.corputils_search'),
+
+                       # FLEET FITTINGS
+                       url(r'^fits/$', 'services.views.fleet_fits', name='auth_fleet_fits'),
+
+                       # Sig Tracker
+                       url(r'^sigtracker/$', 'sigtracker.views.sigtracker_view', name='auth_signature_view'),
+                       url(r'^add_signature/$', 'sigtracker.views.add_signature_view', name='auth_add_signature_view'),
+                       url(r'^remove_signature/(\w+)', 'sigtracker.views.remove_signature', name='auth_remove_signature'),
+                       url(r'^edit_signature/(\w+)$', 'sigtracker.views.edit_signature', name='auth_edit_signature'),
+
+                       # Fleet Operations Timers
+                       url(r'^optimer/$', 'optimer.views.optimer_view', name='auth_optimer_view'),
+                       url(r'^add_optimer/$', 'optimer.views.add_optimer_view', name='auth_add_optimer_view'),
+                       url(r'^remove_optimer/(\w+)', 'optimer.views.remove_optimer', name='auth_remove_optimer'),
+                       url(r'^edit_optimer/(\w+)$', 'optimer.views.edit_optimer', name='auth_edit_optimer'),
+
+                       # Notifications
+                       url(r'^notifications/$', 'notifications.views.notification_list', name='auth_notification_list'),
+                       url(r'^notifications/(\w+)/$', 'notifications.views.notification_view', name='auth_notification_view'),
+                       url(r'^remove_notifications/(\w+)/$', 'notifications.views.remove_notification', name='auth_remove_notification'),
 )
