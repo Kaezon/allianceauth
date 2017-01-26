@@ -5,7 +5,10 @@ evelink
 dnspython
 passlib
 requests>=2.9.1
-#requests_cache
+bcrypt
+zeroc-ice
+slugify
+requests-oauthlib
 
 # Django Stuff #
 django==1.6.5

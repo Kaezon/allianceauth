@@ -2,7 +2,6 @@ from django.conf import settings
 from django.shortcuts import render_to_response
 from django.template import RequestContext
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.decorators import permission_required
 from django.shortcuts import HttpResponseRedirect
 
 from collections import namedtuple
@@ -14,19 +13,45 @@ from eveonline.models import EveCorporationInfo
 from eveonline.models import EveAllianceInfo
 from eveonline.models import EveCharacter
 from eveonline.models import EveApiKeyPair
-from authentication.models import AuthServicesInfo
+from fleetactivitytracking.models import Fat
 from util import check_if_user_has_permission
 from forms import CorputilsSearchForm
 from evelink.api import APIError
 
 import logging
+import datetime
 
 logger = logging.getLogger(__name__)
+class Player(object):
+    def __init__(self, main, user, maincorp, maincorpid, altlist, apilist, n_fats):
+        self.main = main
+        self.user = user
+        self.maincorp = maincorp
+        self.maincorpid = maincorpid
+        self.altlist = altlist
+        self.apilist = apilist
+        self.n_fats = n_fats
+
+def first_day_of_next_month(year, month):
+    if month == 12:
+        return datetime.datetime(year+1,1,1)
+    else:
+        return datetime.datetime(year, month+1, 1)
+
+def first_day_of_previous_month(year, month):
+    if month == 1:
+        return datetime.datetime(year-1,12,1)
+    else:
+        return datetime.datetime(year, month-1, 1)
 
 
-# Because corp-api only exist for the executor corp, this function will only be available in corporation mode.
 @login_required
-def corp_member_view(request, corpid = None):
+def corp_member_view(request, corpid = None, year=datetime.date.today().year, month=datetime.date.today().month):
+    year = int(year)
+    month = int(month)
+    start_of_month = datetime.datetime(year, month, 1)
+    start_of_next_month = first_day_of_next_month(year, month)
+    start_of_previous_month = first_day_of_previous_month(year, month)
     logger.debug("corp_member_view called by user %s" % request.user)
 
     try:
@@ -39,11 +64,16 @@ def corp_member_view(request, corpid = None):
     if not settings.IS_CORP:
         alliance = EveAllianceInfo.objects.get(alliance_id=settings.ALLIANCE_ID)
         alliancecorps = EveCorporationInfo.objects.filter(alliance=alliance)
-        membercorp_list = [(int(membercorp.corporation_id), str(membercorp.corporation_name)) for membercorp in alliancecorps]
-        membercorp_list.sort(key=lambda tup: tup[1])
-
+        membercorplist = [(int(membercorp.corporation_id), str(membercorp.corporation_name)) for membercorp in alliancecorps]
+        membercorplist.sort(key=lambda tup: tup[1])
         membercorp_id_list = [int(membercorp.corporation_id) for membercorp in alliancecorps]
-        if user_corp_id not in membercorp_id_list:
+
+        bluecorps = EveCorporationInfo.objects.filter(is_blue=True)
+        bluecorplist = [(int(bluecorp.corporation_id), str(bluecorp.corporation_name)) for bluecorp in bluecorps]
+        bluecorplist.sort(key=lambda tup: tup[1])
+        bluecorp_id_list = [int(bluecorp.corporation_id) for bluecorp in bluecorps]
+
+        if not (user_corp_id in membercorp_id_list or user_corp_id not in bluecorp_id_list):
             user_corp_id = None
 
     if not corpid:
@@ -52,10 +82,9 @@ def corp_member_view(request, corpid = None):
         elif user_corp_id:
             corpid = user_corp_id
         else:
-            corpid = membercorp_list[0][0]
+            corpid = membercorplist[0][0]
 
     corp = EveCorporationInfo.objects.get(corporation_id=corpid)
-    Player = namedtuple("Player", ["main", "maincorp", "maincorpid", "altlist", "apilist"])
 
     if check_if_user_has_permission(request.user, 'alliance_apis') or (check_if_user_has_permission(request.user, 'corp_apis') and (user_corp_id == corpid)):
         logger.debug("Retreiving and sending API-information")
@@ -83,33 +112,75 @@ def corp_member_view(request, corpid = None):
                     mainname = mainchar.character_name
                     maincorp = mainchar.corporation_name
                     maincorpid = mainchar.corporation_id
-                except (ValueError, EveCharacter.DoesNotExist):
+                    api_pair = EveApiKeyPair.objects.get(api_id=char.api_id)
+                except (ValueError, EveCharacter.DoesNotExist, EveApiKeyPair.DoesNotExist):
+                    logger.info("No main character seem to be set for character %s" % char.character_name)
                     mainname = "User: " + char_owner.username
                     mainchar = char
                     maincorp = "Not set."
                     maincorpid = None
+                    api_pair = None
                 num_registered_characters = num_registered_characters + 1
                 characters_with_api.setdefault(mainname, Player(main=mainchar,
+                                                                user=char_owner,
                                                                 maincorp=maincorp,
                                                                 maincorpid=maincorpid,
                                                                 altlist=[],
-                                                                apilist=[])
+                                                                apilist=[],
+                                                                n_fats=0)
                                                ).altlist.append(char)
-
-                characters_with_api[mainname].apilist.append(EveApiKeyPair.objects.get(api_id=char.api_id))
-            except(EveApiKeyPair.DoesNotExist):
-                logger.info("User %s EveApiKeyPair does not exist. is main char selected?" % char_owner)
-                pass
+                if api_pair:
+                    characters_with_api[mainname].apilist.append(api_pair)
 
             except (EveCharacter.DoesNotExist):
                 characters_without_api.update({member_data["name"]: member_data["id"]})
 
+        for char in EveCharacter.objects.filter(corporation_id=corpid):
+            if not int(char.character_id) in member_list:
+                logger.info("Character '%s' does not exist in EveWho dump." % char.character_name)
+                char_owner = char.user
+                try:
+                    mainid = int(AuthServicesInfoManager.get_auth_service_info(user=char_owner).main_char_id)
+                    mainchar = EveCharacter.objects.get(character_id=mainid)
+                    mainname = mainchar.character_name
+                    maincorp = mainchar.corporation_name
+                    maincorpid = mainchar.corporation_id
+                    api_pair = EveApiKeyPair.objects.get(api_id=char.api_id)
+                except (ValueError, EveCharacter.DoesNotExist, EveApiKeyPair.DoesNotExist):
+                    logger.info("No main character seem to be set for character %s" % char.character_name)
+                    mainname = "User: " + char_owner.username
+                    mainchar = char
+                    maincorp = "Not set."
+                    maincorpid = None
+                    api_pair = None
+                num_registered_characters = num_registered_characters + 1
+                characters_with_api.setdefault(mainname, Player(main=mainchar,
+                                                                user=char_owner,
+                                                                maincorp=maincorp,
+                                                                maincorpid=maincorpid,
+                                                                altlist=[],
+                                                                apilist=[],
+                                                                n_fats=0)
+                                               ).altlist.append(char)
+                if api_pair:
+                    characters_with_api[mainname].apilist.append(api_pair)
+
+        n_unacounted = corp.member_count - (num_registered_characters + len(characters_without_api))
+
+        for mainname, player in characters_with_api.items():
+            fats_this_month = Fat.objects.filter(user=player.user).filter(fatlink__fatdatetime__gte = start_of_month).filter(fatlink__fatdatetime__lt = start_of_next_month)
+            characters_with_api[mainname].n_fats = len(fats_this_month)
+
+        if start_of_next_month > datetime.datetime.now():
+            start_of_next_month = None
+
 
         if not settings.IS_CORP:
-            context = {"membercorp_list": membercorp_list,
+            context = {"membercorplist": membercorplist,
                        "corp": corp,
                        "characters_with_api": sorted(characters_with_api.items()),
                        'n_registered': num_registered_characters,
+                       'n_unacounted': n_unacounted,
                        "characters_without_api": sorted(characters_without_api.items()),
                        "search_form": CorputilsSearchForm()}
         else:
@@ -117,8 +188,13 @@ def corp_member_view(request, corpid = None):
             context = {"corp": corp,
                        "characters_with_api": sorted(characters_with_api.items()),
                        'n_registered': num_registered_characters,
+                       'n_unacounted': n_unacounted,
                        "characters_without_api": sorted(characters_without_api.items()),
                        "search_form": CorputilsSearchForm()}
+
+        context["next_month"] = start_of_next_month
+        context["previous_month"] = start_of_previous_month
+        context["this_month"] = start_of_month
 
         return render_to_response('registered/corputils.html',context, context_instance=RequestContext(request) )
     return HttpResponseRedirect("/dashboard/")
@@ -169,22 +245,22 @@ def corputils_search(request, corpid=settings.CORP_ID):
                             char = EveCharacter.objects.get(character_name=member_data["name"])
                             user = char.user
                             mainid = int(AuthServicesInfoManager.get_auth_service_info(user=user).main_char_id)
-                            mainname = EveCharacter.objects.get(character_id=mainid).character_name
+                            main = EveCharacter.objects.get(character_id=mainid)
                             api_registered = True
                             apiinfo = EveApiKeyPair.objects.get(api_id=char.api_id)
                         except EveCharacter.DoesNotExist:
                             api_registered = False
                             char = None
-                            mainname = ""
+                            main = ""
                             apiinfo = None
 
-                        searchresults.append(SearchResult(name=member_data["name"], id=memberid, main=mainname, api_registered=api_registered,
+                        searchresults.append(SearchResult(name=member_data["name"], id=memberid, main=main, api_registered=api_registered,
                                                     character=char, apiinfo=apiinfo))
 
 
                 logger.info("Found %s members for user %s matching search string %s" % (len(searchresults), request.user, searchstring))
 
-                context = {'corp': corp, 'results': searchresults, 'search_form': CorputilsSearchForm()}
+                context = {'corp': corp, 'results': searchresults, 'search_form': CorputilsSearchForm(), "year":datetime.datetime.now().year, "month":datetime.datetime.now().month}
 
                 return render_to_response('registered/corputilssearchview.html',
                                           context, context_instance=RequestContext(request))

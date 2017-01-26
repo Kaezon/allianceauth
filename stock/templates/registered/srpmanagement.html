@@ -1,43 +1,45 @@
 {% extends "public/base.html" %}
 {% load bootstrap %}
 {% load staticfiles %}
+{% load i18n %}
+
 {% load humanize %}
 {% block title %}Alliance Auth{% endblock %}
 
-{% block page_title %}Srp Management{% endblock page_title %}
+{% block page_title %}{% trans "Srp Management" %}{% endblock page_title %}
 {% block extra_css %}{% endblock extra_css %}
 
 {% block content %}
     <div class="col-lg-12">
         <div class="row">
-            <h1 class="page-header text-center">SRP Management
+            <h1 class="page-header text-center">{% trans "SRP Management" %}
                 <div class="text-right">
                     {% if perms.auth.srp_management %}
                         <a href="{% url 'auth_srp_management_all_view' %}">
-                            <button type="button" class="btn btn-primary">View All</button>
+                            <button type="button" class="btn btn-primary">{% trans "View All" %}</button>
                         </a>
                         <a href="{% url 'auth_srp_fleet_add_view' %}">
-                            <button type="button" class="btn btn-success">Add SRP Fleet</button>
+                            <button type="button" class="btn btn-success">{% trans "Add SRP Fleet" %}</button>
                         </a>
                     {% endif %}
                 </div>
             </h1>
             <div class="alert alert-info" role="alert">
                 <div class="text-right">
-                    <b>Total ISK Cost: {{ totalcost | intcomma }}</b>
+                    <b>{% trans "Total ISK Cost:" %} {{ totalcost | intcomma }}</b>
                 </div>
             </div>
             <table class="table table-bordered">
                 <tr>
-                    <th class="text-center">Fleet Name</th>
-                    <th class="text-center">Fleet Time</th>
-                    <th class="text-center">Fleet Doctrine</th>
-                    <th class="text-center">Fleet Commander</th>
-                    <th class="text-center">Fleet AAR</th>
-                    <th class="text-center">Fleet SRP Code</th>
-                    <th class="text-center">Fleet ISK Cost</th>
-                    <th class="text-center">SRP Status</th>
-                    <th class="text-center">Actions</th>
+                    <th class="text-center">{% trans "Fleet Name" %}</th>
+                    <th class="text-center">{% trans "Fleet Time" %}</th>
+                    <th class="text-center">{% trans "Fleet Doctrine" %}</th>
+                    <th class="text-center">{% trans "Fleet Commander" %}</th>
+                    <th class="text-center">{% trans "Fleet AAR" %}</th>
+                    <th class="text-center">{% trans "Fleet SRP Code" %}</th>
+                    <th class="text-center">{% trans "Fleet ISK Cost" %}</th>
+                    <th class="text-center">{% trans "SRP Status" %}</th>
+                    <th class="text-center">{% trans "Actions" %}</th>
                 </tr>
                 {% for srpfleet in srpfleets %}
                     <tr>
@@ -46,7 +48,7 @@
                                 {{ srpfleet.fleet_name }}
                             </div>
                         </td>
-                        <td class="text-center">{{ srpfleet.fleet_time }}</td>
+                        <td class="text-center">{{ srpfleet.fleet_time | date:"Y-m-d H:i" }}</td>
                         <td class="text-center">{{ srpfleet.fleet_doctrine }}</td>
                         <td class="text-center">
                             <div class="label label-success">
@@ -56,10 +58,16 @@
                         <th class="text-center"><a href="{{ srpfleet.fleet_srp_aar_link }}"
                                                    target="_blank">{{ srpfleet.fleet_srp_aar_link }}</a></th>
                         <th class="text-center">
+                            {% if srpfleet.fleet_srp_code %}
                             <div class="label label-warning">
                                 <a href="/srp_request/{{ srpfleet.fleet_srp_code }}"
-                                   target="_blank">{{ srpfleet.fleet_srp_code }}</a>
+                                   >{{ srpfleet.fleet_srp_code }}</a>
                             </div>
+                            {% else %}
+                                <div class="label label-danger">
+                                    {% trans "Disabled" %}
+                                </div>
+                            {% endif %}
                         </th>
                         <td class="text-center">
                             {% for key,value in price_pair.items %}
@@ -72,11 +80,11 @@
                         <td class="text-center">
                             {% if srpfleet.fleet_srp_status == "" %}
                                 <div class="label label-warning">
-                                    Pending
+                                    {% trans "Pending" %}
                                 </div>
                             {% else %}
                                 <div class="label label-success">
-                                    Completed
+                                    {% trans "Completed" %}
                                 </div>
                             {% endif %}
                         </td>
@@ -95,8 +103,20 @@
 
                                 <a href="/srp_fleet_remove/{{ srpfleet.id }}">
                                     <button type="button" class="btn btn-danger"><span
-                                            class="glyphicon glyphicon-remove"></span></button>
+                                            class="glyphicon glyphicon-trash"></span></button>
                                 </a>
+                                {% if srpfleet.fleet_srp_code %}
+                                    <a href="/srp_fleet_disable/{{ srpfleet.id }}">
+                                    <button type="button" class="btn btn-warning"><span
+                                            class="glyphicon glyphicon-remove-sign"></span></button>
+                                    </a>
+                                {% else %}
+                                    <a href="/srp_fleet_enable/{{ srpfleet.id }}">
+                                    <button type="button" class="btn btn-success"><span
+                                            class="glyphicon glyphicon-ok-sign"></span></button>
+                                    </a>
+                                {% endif %}
+
                             {% endif %}
                         </td>
                     </tr>

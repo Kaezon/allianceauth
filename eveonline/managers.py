@@ -106,7 +106,7 @@ class EveManager:
             alliance_info.member_count = alliance_member_count
             alliance_info.is_blue = is_blue
             alliance_info.save()
-            logger.info("Updated alliance model %s" % alliance_info)
+            logger.debug("Updated alliance model %s" % alliance_info)
         else:
             logger.warn("Attempting to update non-existing alliance model with id %s" % alliance_id)
 
@@ -136,7 +136,7 @@ class EveManager:
             corp_info.alliance = alliance
             corp_info.is_blue = is_blue
             corp_info.save()
-            logger.info("Updated corp model %s" % corp_info)
+            logger.debug("Updated corp model %s" % corp_info)
         else:
             logger.warn("Attempting to update non-existant corp model with id %s" % corp_id)
 
@@ -156,6 +156,18 @@ class EveManager:
         else:
             logger.debug("Determined api id %s does not exist." % api_id)
             return False
+
+    @staticmethod
+    def check_if_api_key_pair_is_new(api_id, fudge_factor):
+        if EveApiKeyPair.objects.count() == 0:
+            return True
+        latest_api_id = int(EveApiKeyPair.objects.order_by('-api_id')[0].api_id) - fudge_factor
+        if latest_api_id >= api_id:
+            logger.debug("api key (%d) is older than latest API key (%d). Rejecting" % (api_id, latest_api_id) )
+            return False
+        else:
+            logger.debug("api key (%d) is new. Accepting" % api_id )
+            return True
 
     @staticmethod
     def delete_api_key_pair(api_id, user_id):

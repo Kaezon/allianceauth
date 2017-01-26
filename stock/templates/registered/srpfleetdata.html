@@ -1,6 +1,8 @@
 {% extends "public/base.html" %}
 {% load bootstrap %}
 {% load staticfiles %}
+{% load i18n %}
+
 {% load humanize %}
 {% block title %}Alliance Auth{% endblock %}
 
@@ -10,16 +12,16 @@
 {% block content %}
     <div class="col-lg-12">
         <div class="row">
-            <h1 class="page-header text-center">SRP Fleet Data
+            <h1 class="page-header text-center">{% trans "SRP Fleet Data" %}
                 <div class="text-right">
                     {% if perms.auth.srp_management %}
                         {% if fleet_status == "Completed" %}
                             <a href="/srp_fleet_mark_uncompleted/{{ fleet_id }}">
-                                <button type="button" class="btn btn-warning">Mark Incomplete</button>
+                                <button type="button" class="btn btn-warning">{% trans "Mark Incomplete" %}</button>
                             </a>
                         {% else %}
                             <a href="/srp_fleet_mark_completed/{{ fleet_id }}">
-                                <button type="button" class="btn btn-success">Mark Completed</button>
+                                <button type="button" class="btn btn-success">{% trans "Mark Completed" %}</button>
                             </a>
                         {% endif %}
                     {% endif %}
@@ -27,20 +29,23 @@
             </h1>
             <div class="alert alert-info" role="alert">
                 <div class="text-right">
-                    <b>Total Losses: {{ srpfleetrequests.count }}</b>
+                    <b>{% trans "Total Losses:" %} {{ srpfleetrequests.count }}</b>
                     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-                    <b>Total ISK Cost: {{ totalcost | intcomma }}</b>
+                    <b>{% trans "Total ISK Cost:" %} {{ totalcost | intcomma }}</b>
                 </div>
             </div>
             <table class="table table-bordered">
                 <tr>
-                    <th class="text-center">Pilot Name</th>
-                    <th class="text-center">Killboard Link</th>
-                    <th class="text-center">Additional Info</th>
-                    <th class="text-center">SRP ISK Cost</th>
-                    <th class="text-center">Status</th>
+                    <th class="text-center">{% trans "Pilot Name" %}</th>
+                    <th class="text-center">{% trans "Killboard Link" %}</th>
+                    <th class="text-center">{% trans "Additional Info" %}</th>
+                    <th class="text-center">{% trans "Ship Type" %}</th>
+                    <th class="text-center">{% trans "Killboard Loss Amt" %}</th>
+                    <th class="text-center">{% trans "SRP ISK Cost" %}</th>
+                    <th class="text-center">{% trans "Post Time" %}</th>
+                    <th class="text-center">{% trans "Status" %}</th>
                     {% if perms.auth.srp_management %}
-                        <th class="text-center">Actions</th>
+                        <th class="text-center">{% trans "Actions" %}</th>
                     {% endif %}
                 </tr>
                 {% for srpfleetrequest in srpfleetrequests %}
@@ -55,19 +60,22 @@
                                target="_blank">{{ srpfleetrequest.killboard_link }}</a>
                         </td>
                         <td class="text-center">{{ srpfleetrequest.additional_info }}</td>
+                        <td class="text-center">{{ srpfleetrequest.srp_ship_name }}</td>
+                        <td class="text-center">ISK: {{ srpfleetrequest.kb_total_loss | intcomma }}</td>
                         <td class="text-center">ISK: {{ srpfleetrequest.srp_total_amount | intcomma }}</td>
+                        <td class="text-center">{{ srpfleetrequest.post_time | date:"Y-m-d H:i" }}</td>
                         <td class="text-center">
                             {% if srpfleetrequest.srp_status == "Approved" %}
                                 <div class="label label-success">
-                                    Approved
+                                    {% trans "Approved" %}
                                 </div>
                             {% elif srpfleetrequest.srp_status == "Rejected" %}
                                 <div class="label label-danger">
-                                    Rejected
+                                    {% trans "Rejected" %}
                                 </div>
                             {% else %}
                                 <div class="label label-warning">
-                                    Pending
+                                    {% trans "Pending" %}
                                 </div>
                             {% endif %}
                         </td>
@@ -78,18 +86,43 @@
                                     <button type="button" class="btn btn-info"><span
                                             class="glyphicon glyphicon-pencil"></span></button>
                                 </a>
-                                <a href="/srp_request_approve/{{ srpfleetrequest.id }}">
+                                {% if srpfleetrequest.srp_status == "Rejected" %}
+                                    <a href="/srp_request_approve/{{ srpfleetrequest.id }}">
                                     <button type="button" class="btn btn-success"><span
                                             class="glyphicon glyphicon-ok"></span></button>
-                                </a>
-                                <a href="/srp_request_reject/{{ srpfleetrequest.id }}">
+                                    </a>
+                                {% elif srpfleetrequest.srp_status == "Pending" %}
+                                    <a href="/srp_request_approve/{{ srpfleetrequest.id }}">
+                                    <button type="button" class="btn btn-success"><span
+                                            class="glyphicon glyphicon-ok"></span></button>
+                                    </a>
+                                {% elif srpfleetrequest.srp_status == "" %}
+                                    <a href="/srp_request_approve/{{ srpfleetrequest.id }}">
+                                    <button type="button" class="btn btn-success"><span
+                                            class="glyphicon glyphicon-ok"></span></button>
+                                    </a>
+                                {% endif %}
+                                {% if srpfleetrequest.srp_status == "Approved" %}
+                                    <a href="/srp_request_reject/{{ srpfleetrequest.id }}">
                                     <button type="button" class="btn btn-warning"><span
                                             class="glyphicon glyphicon-remove"></span></button>
-                                </a>
+                                    </a>
+                                {% elif srpfleetrequest.srp_status == "Pending" %}
+                                    <a href="/srp_request_reject/{{ srpfleetrequest.id }}">
+                                    <button type="button" class="btn btn-warning"><span
+                                            class="glyphicon glyphicon-remove"></span></button>
+                                    </a>
+                                {% elif srpfleetrequest.srp_status == "" %}
+                                    <a href="/srp_request_reject/{{ srpfleetrequest.id }}">
+                                    <button type="button" class="btn btn-warning"><span
+                                            class="glyphicon glyphicon-remove"></span></button>
+                                    </a>
+                                {% endif %}
                                 <a href="/srp_request_remove/{{ srpfleetrequest.id }}">
                                     <button type="button" class="btn btn-danger"><span
                                             class="glyphicon glyphicon-trash"></span></button>
                                 </a>
+
                             </td>
                         {% endif %}
                     </tr>

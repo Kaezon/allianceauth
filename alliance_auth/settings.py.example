@@ -30,7 +30,7 @@ DEBUG = 'True' == os.environ.get('AA_DEBUG','True')
 
 TEMPLATE_DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['127.0.0.1','yourdomain.com','www.yourdomain.com']
 
 BROKER_URL = 'amqp://guest:guest@localhost:5672/'
 
@@ -61,6 +61,7 @@ INSTALLED_APPS = (
     'sigtracker',
     'optimer',
     'corputils',
+    'fleetactivitytracking',
     'notifications',
 )
 
@@ -71,6 +72,17 @@ MIDDLEWARE_CLASSES = (
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django.middleware.locale.LocaleMiddleware',
+)
+
+LOCALE_PATHS = (
+    os.path.join(BASE_DIR, 'locale/'),
+)
+
+ugettext = lambda s: s
+LANGUAGES = (
+    ('en', ugettext('English')),
+    ('de', ugettext('German')),
 )
 
 ROOT_URLCONF = 'alliance_auth.urls'
@@ -99,14 +111,42 @@ DATABASES = {
         'PORT': os.environ.get('AA_DB_PHPBB3_PORT', '3306'),
     },
 
-    'mumble': {
+    'ips4': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'alliance_mumble',
-        'USER': os.environ.get('AA_DB_MUMBLE_USER', 'allianceserver'),
-        'PASSWORD': os.environ.get('AA_DB_MUMBLE_PASSWORD', 'password'),
-        'HOST': os.environ.get('AA_DB_MUMBLE_HOST', '127.0.0.1'),
-        'PORT': os.environ.get('AA_DB_MUMBLE_PORT', '3306'),
+        'NAME': 'alliance_ips4',
+        'USER': os.environ.get('AA_DB_IPS4_USER', 'allianceserver'),
+        'PASSWORD': os.environ.get('AA_DB_IPS4_PASSWORD', 'password'),
+        'HOST': os.environ.get('AA_DB_IPS4_HOST', '127.0.0.1'),
+        'PORT': os.environ.get('AA_DB_IPS4_PORT', '3306'),
+    },
+
+    'smf': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'alliance_smf',
+        'USER': os.environ.get('AA_DB_SMF_USER', 'allianceserver'),
+        'PASSWORD': os.environ.get('AA_DB_SMF_PASSWORD', 'password'),
+        'HOST': os.environ.get('AA_DB_SMF_HOST', '127.0.0.1'),
+        'PORT': os.environ.get('AA_DB_SMF_PORT', '3306'),
+    },
+
+    'market': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'alliance_market',
+        'USER': os.environ.get('AA_DB_MARKET_USER', 'allianceserver'),
+        'PASSWORD': os.environ.get('AA_DB_MARKET_PASSWORD', 'password'),
+        'HOST': os.environ.get('AA_DB_MARKET_HOST', '127.0.0.1'),
+        'PORT': os.environ.get('AA_DB_MARKET_PORT', '3306'),
+    },
+
+    'pathfinder': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'alliance_pathfinder',
+        'USER': os.environ.get('AA_DB_PATHFINDER_USER', 'allianceserver'),
+        'PASSWORD': os.environ.get('AA_DB_PATHFINDER_PASSWORD', 'password'),
+        'HOST': os.environ.get('AA_DB_PATHFINDER_HOST', '127.0.0.1'),
+        'PORT': os.environ.get('AA_DB_PATHFINDER_PORT', '3306'),
     }
+    
 }
 
 TEMPLATE_CONTEXT_PROCESSORS = (
@@ -131,13 +171,13 @@ TEMPLATE_CONTEXT_PROCESSORS = (
 )
 
 TEMPLATE_DIRS = (
-    'customization/templates',
-    'stock/templates',
+    os.path.join(BASE_DIR, 'customization/templates'),
+    os.path.join(BASE_DIR, 'stock/templates'),
 )
 
 STATICFILES_DIRS = (
-    'customization/static',
-    'stock/static',
+    os.path.join(BASE_DIR, "customization/static"),
+    os.path.join(BASE_DIR, "stock/static"),
 )
 
 LOGIN_URL = '/login_user/'
@@ -159,11 +199,6 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/1.6/howto/static-files/
 STATIC_URL = '/static/'
 STATIC_ROOT = '/home/allianceserver/allianceauth/static/'
-
-# Cache directory for EveWho, no ending /
-# by default this becomes ~/<installdir>/alliance_auth/cache
-# This directory needs to be writable by the webserver
-EVEWHO_CACHE_DIR = '{}/cache'.format(BASE_DIR)
 
 
 #####################################################
@@ -188,7 +223,7 @@ IS_CORP = 'True' == os.environ.get('AA_IS_CORP', 'True')
 # DOMAIN - The alliance auth domain_url
 # EMAIL_HOST - SMTP Server URL
 # EMAIL_PORT - SMTP Server PORT
-# EMAIL_HOST_USER - Email Username (for gmail, the part before @gmail.com)
+# EMAIL_HOST_USER - Email Username (for gmail, the entire address)
 # EMAIL_HOST_PASSWORD - Email Password
 # EMAIL_USE_TLS - Set to use TLS encryption
 #################
@@ -205,10 +240,12 @@ EMAIL_USE_TLS = 'True' == os.environ.get('AA_EMAIL_USE_TLS', 'True')
 # KILLBOARD_URL - URL for your killboard. Blank to hide link
 # MEDIA_URL - URL for your media page (youtube etc). Blank to hide link
 # FORUM_URL - URL for your forums. Blank to hide link
+# SMF_URL - URL for your SMF forums.
 ####################
 KILLBOARD_URL = os.environ.get('AA_KILLBOARD_URL', '')
 EXTERNAL_MEDIA_URL = os.environ.get('AA_EXTERNAL_MEDIA_URL', '')
 FORUM_URL = os.environ.get('AA_FORUM_URL', '')
+SMF_URL = os.environ.get('AA_SMF_URL', '')
 
 #########################
 # Default Group Settings
@@ -233,6 +270,12 @@ BLUE_ALLIANCE_GROUPS = 'True' == os.environ.get('AA_BLUE_ALLIANCE_GROUPS', 'Fals
 # ENABLE_AUTH_MUMBLE - Enable mumble support in the auth for auth'd members
 # ENABLE_AUTH_IPBOARD - Enable IPBoard forum support in the auth for auth'd members
 # ENABLE_AUTH_DISCORD - Enable Discord support in the auth for auth'd members
+# ENABLE_AUTH_DISCOURSE - Enable Discourse support in the auth for auth'd members
+# ENABLE_AUTH_IPS4 - Enable IPS4 support in the auth for auth'd members
+# ENABLE_AUTH_SMF - Enable SMF forum support in the auth for auth'd members
+# ENABLE_AUTH_MARKET = Enable Alliance Market support in auth for auth'd members
+# ENABLE_AUTH_PATHFINDER = Enable Alliance Pathfinder suppor in auth for auth'd members
+# ENABLE_AUTH_XENFORO = Enable XenForo forums support in the auth for auth'd members
 #########################
 ENABLE_AUTH_FORUM = 'True' == os.environ.get('AA_ENABLE_AUTH_FORUM', 'False')
 ENABLE_AUTH_JABBER = 'True' == os.environ.get('AA_ENABLE_AUTH_JABBER', 'False')
@@ -240,6 +283,12 @@ ENABLE_AUTH_MUMBLE = 'True' == os.environ.get('AA_ENABLE_AUTH_MUMBLE', 'False')
 ENABLE_AUTH_IPBOARD = 'True' == os.environ.get('AA_ENABLE_AUTH_IPBOARD', 'False')
 ENABLE_AUTH_TEAMSPEAK3 = 'True' == os.environ.get('AA_ENABLE_AUTH_TEAMSPEAK3', 'False')
 ENABLE_AUTH_DISCORD = 'True' == os.environ.get('AA_ENABLE_AUTH_DISCORD', 'False')
+ENABLE_AUTH_DISCOURSE = 'True' == os.environ.get('AA_ENABLE_AUTH_DISCOURSE', 'False')
+ENABLE_AUTH_IPS4 = 'True' == os.environ.get('AA_ENABLE_AUTH_IPS4', 'False')
+ENABLE_AUTH_SMF = 'True' == os.environ.get('AA_ENABLE_AUTH_SMF', 'False')
+ENABLE_AUTH_MARKET = 'True' == os.environ.get('AA_ENABLE_AUTH_MARKET', 'False')
+ENABLE_AUTH_PATHFINDER = 'True' == os.environ.get('AA_ENABLE_AUTH_PATHFINDER', 'False')
+ENABLE_AUTH_XENFORO = 'True' == os.environ.get('AA_ENABLE_AUTH_XENFORO', 'False')
 
 #####################
 # Blue service Setup
@@ -250,6 +299,12 @@ ENABLE_AUTH_DISCORD = 'True' == os.environ.get('AA_ENABLE_AUTH_DISCORD', 'False'
 # ENABLE_BLUE_MUMBLE - Enable mumble support in the auth for blues
 # ENABLE_BLUE_IPBOARD - Enable IPBoard forum support in the auth for blues
 # ENABLE_BLUE_DISCORD - Enable Discord support in the auth for blues
+# ENABLE_BLUE_DISCOURSE - Enable Discord support in the auth for blues
+# ENABLE_BLUE_IPS4 - Enable IPS4 forum support in the auth for blues
+# ENABLE_BLUE_SMF - Enable SMF forum support in the auth for blues
+# ENABLE_BLUE_MARKET - Enable Alliance Market in the auth for blues
+# ENABLE_BLUE_PATHFINDER = Enable Pathfinder support in the auth for blues
+# ENABLE_BLUE_XENFORO = Enable XenForo forum support in the auth for blue 
 #####################
 BLUE_STANDING = float(os.environ.get('AA_BLUE_STANDING', '5.0'))
 ENABLE_BLUE_FORUM = 'True' == os.environ.get('AA_ENABLE_BLUE_FORUM', 'False')
@@ -258,6 +313,12 @@ ENABLE_BLUE_MUMBLE = 'True' == os.environ.get('AA_ENABLE_BLUE_MUMBLE', 'False')
 ENABLE_BLUE_IPBOARD = 'True' == os.environ.get('AA_ENABLE_BLUE_IPBOARD', 'False')
 ENABLE_BLUE_TEAMSPEAK3 = 'True' == os.environ.get('AA_ENABLE_BLUE_TEAMSPEAK3', 'False')
 ENABLE_BLUE_DISCORD = 'True' == os.environ.get('AA_ENABLE_BLUE_DISCORD', 'False')
+ENABLE_BLUE_DISCOURSE = 'True' == os.environ.get('AA_ENABLE_BLUE_DISCOURSE', 'False')
+ENABLE_BLUE_IPS4 = 'True' == os.environ.get('AA_ENABLE_BLUE_IPS4', 'False')
+ENABLE_BLUE_SMF = 'True' == os.environ.get('AA_ENABLE_BLUE_SMF', 'False')
+ENABLE_BLUE_MARKET = 'True' == os.environ.get('AA_ENABLE_BLUE_MARKET', 'False')
+ENABLE_BLUE_PATHFINDER = 'True' == os.environ.get('AA_ENABLE_BLUE_PATHFINDER', 'False')
+ENABLE_BLUE_XENFORO = 'True' == os.environ.get('AA_ENABLE_BLUE_XENFORO', 'False')
 
 #########################
 # Corp Configuration
@@ -272,7 +333,6 @@ CORP_ID = os.environ.get('AA_CORP_ID', '')
 CORP_NAME = os.environ.get('AA_CORP_NAME', '')
 CORP_API_ID = os.environ.get('AA_CORP_API_ID', '')
 CORP_API_VCODE = os.environ.get('AA_CORP_API_VCODE', '')
-
 
 #########################
 # Alliance Configuration
@@ -290,11 +350,25 @@ ALLIANCE_NAME = os.environ.get('AA_ALLIANCE_NAME', '')
 # MEMBER_API_ACCOUNT - Require API to be for Account and not character restricted
 # BLUE_API_MASK - Numeric value of minimum API mask required for blues
 # BLUE_API_ACCOUNT - Require API to be for Account and not character restricted
+# REJECT_OLD_APIS - Require each submitted API be newer than the latest submitted API
+# REJECT_OLD_APIS_MARGIN - Margin from latest submitted API ID within which a newly submitted API is still accepted
 #######################
 MEMBER_API_MASK = os.environ.get('AA_MEMBER_API_MASK', 268435455)
 MEMBER_API_ACCOUNT = 'True' == os.environ.get('AA_MEMBER_API_ACCOUNT', 'True')
 BLUE_API_MASK = os.environ.get('AA_BLUE_API_MASK', 8388608)
 BLUE_API_ACCOUNT = 'True' == os.environ.get('AA_BLUE_API_ACCOUNT', 'False')
+REJECT_OLD_APIS = 'True' == os.environ.get('AA_REJECT_OLD_APIS', 'False')
+REJECT_OLD_APIS_MARGIN = os.environ.get('AA_REJECT_OLD_APIS_MARGIN', 50)
+
+##########################
+# Pathfinder Configuration
+##########################
+PATHFINDER_URL = os.environ.get('AA_PATHFINDER_URL', 'http://pathfinder.yourdomain.com')
+
+#####################
+# Alliance Market
+#####################
+MARKET_URL = os.environ.get('AA_MARKET_URL', 'http://yourdomain.com/market')
 
 #####################
 # HR Configuration
@@ -314,6 +388,14 @@ JACK_KNIFE_URL = os.environ.get('AA_JACK_KNIFE_URL', 'http://ridetheclown.com/ev
 IPBOARD_ENDPOINT = os.environ.get('AA_IPBOARD_ENDPOINT', 'yourdomain.com/interface/board/index.php')
 IPBOARD_APIKEY = os.environ.get('AA_IPBOARD_APIKEY', 'somekeyhere')
 IPBOARD_APIMODULE = 'aa'
+
+########################
+# XenForo Configuration
+########################
+XENFORO_ENDPOINT = os.environ.get('AA_XENFORO_ENDPOINT', 'yourdomain.com/api.php')
+XENFORO_DEFAULT_GROUP = os.environ.get('AA_XENFORO_DEFAULT_GROUP', 0)
+XENFORO_APIKEY   = os.environ.get('AA_XENFORO_APIKEY', 'yourapikey')
+#####################
 
 ######################
 # Jabber Configuration
@@ -366,13 +448,53 @@ TEAMSPEAK3_PUBLIC_URL = os.environ.get('AA_TEAMSPEAK3_PUBLIC_URL', 'yourdomain.c
 ######################################
 # Discord Configuration
 ######################################
-# DISCORD_SERVER_ID - ID of the server to manage
-# DISCORD_USER_EMAIL - email of the server management user
-# DISCORD_USER_PASSWORD - password of the server management user
+# DISCORD_GUILD_ID - ID of the guild to manage
+# DISCORD_BOT_TOKEN - oauth token of the app bot user
+# DISCORD_INVITE_CODE - invite code to the server
+# DISCORD_APP_ID - oauth app client ID
+# DISCORD_APP_SECRET - oauth app secret
+# DISCORD_CALLBACK_URL - oauth callback url
 ######################################
-DISCORD_SERVER_ID = os.environ.get('AA_DISCORD_SERVER_ID', '')
-DISCORD_USER_EMAIL = os.environ.get('AA_DISCORD_USER_EMAIL', '')
-DISCORD_USER_PASSWORD = os.environ.get('AA_DISCORD_USER_PASSWORD', '')
+DISCORD_GUILD_ID = os.environ.get('AA_DISCORD_GUILD_ID', '')
+DISCORD_BOT_TOKEN = os.environ.get('AA_DISCORD_BOT_TOKEN', '')
+DISCORD_INVITE_CODE = os.environ.get('AA_DISCORD_INVITE_CODE', '')
+DISCORD_APP_ID = os.environ.get('AA_DISCORD_APP_ID', '')
+DISCORD_APP_SECRET = os.environ.get('AA_DISCORD_APP_SECRET', '')
+DISCORD_CALLBACK_URL = os.environ.get('AA_DISCORD_CALLBACK_URL', 'http://mydomain.com/discord_callback')
+
+######################################
+# Discourse Configuration
+######################################
+# DISCOURSE_URL - Web address of the forums (no trailing slash)
+# DISCOURSE_API_USERNAME - API account username
+# DISCOURSE_API_KEY - API Key
+######################################
+DISCOURSE_URL = os.environ.get('AA_DISCOURSE_URL', '')
+DISCOURSE_API_USERNAME = os.environ.get('AA_DISCOURSE_API_USERNAME', '')
+DISCOURSE_API_KEY = os.environ.get('AA_DISCOURSE_API_KEY', '')
+
+
+#####################################
+# IPS4 Configuration
+#####################################
+# IPS4_URL - base url of the IPS4 install (no trailing slash)
+# IPS4_API_KEY - API key provided by IPS4
+#####################################
+IPS4_URL = os.environ.get('AA_IPS4_URL', 'http://yourdomain.com/ips4')
+IPS4_API_KEY = os.environ.get('AA_IPS4_API_KEY', '')
+
+######################################
+# Fleet-Up Configuration
+######################################
+# FLEETUP_APP_KEY - The app key from http://fleet-up.com/Api/MyApps
+# FLEETUP_USER_ID - The user id from http://fleet-up.com/Api/MyKeys
+# FLEETUP_API_ID - The API id from http://fleet-up.com/Api/MyKeys
+# FLEETUP_GROUP_ID - The id of the group you want to pull data from, see http://fleet-up.com/Api/Endpoints#groups_mygroupmemberships
+######################################
+FLEETUP_APP_KEY = os.environ.get('AA_FLEETUP_APP_KEY', '')
+FLEETUP_USER_ID = os.environ.get('AA_FLEETUP_USER_ID', '')
+FLEETUP_API_ID = os.environ.get('AA_FLEETUP_API_ID', '')
+FLEETUP_GROUP_ID = os.environ.get('AA_FLEETUP_GROUP_ID', '')
 
 #####################################
 # Logging Configuration
@@ -472,6 +594,10 @@ LOGGING = {
             'handlers': ['log_file', 'console', 'notifications'],
             'level': 'DEBUG',
         },
+        'fleetactivitytracking': {
+            'handlers': ['log_file', 'console'],
+            'level': 'ERROR',
+        },
         'util': {
             'handlers': ['log_file', 'console', 'notifications'],
             'level': 'DEBUG',
@@ -482,4 +608,3 @@ LOGGING = {
         },
     }
 }
-
