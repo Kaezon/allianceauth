@@ -1,57 +1,72 @@
+from __future__ import unicode_literals
 from django.conf import settings
-from django.shortcuts import HttpResponseRedirect
-from django.shortcuts import render_to_response
+from django.shortcuts import render, redirect
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.decorators import permission_required
-from django.template import RequestContext
 from django.core.exceptions import ValidationError
+from django.utils.translation import ugettext_lazy as _
 from django.utils import timezone
-
+from django.contrib import messages
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from eveonline.models import EveCharacter
 from eveonline.models import EveCorporationInfo
 from eveonline.managers import EveManager
-from util import check_if_user_has_permission
-from forms import FatlinkForm
-from models import Fatlink, Fat
+from fleetactivitytracking.forms import FatlinkForm
+from fleetactivitytracking.models import Fatlink, Fat
+
+from esi.decorators import token_required
 
 from slugify import slugify
-
-from collections import OrderedDict
 
 import string
 import random
 import datetime
 
-
 import logging
 
 logger = logging.getLogger(__name__)
 
+FATS_PER_PAGE = int(getattr(settings, 'FATS_PER_PAGE', 20))
+
+
+def get_page(model_list, page_num):
+    p = Paginator(model_list, FATS_PER_PAGE)
+    try:
+        fats = p.page(page_num)
+    except PageNotAnInteger:
+        fats = p.page(1)
+    except EmptyPage:
+        fats = p.page(p.num_pages)
+    return fats
+
 
 class CorpStat(object):
-    def __init__(self, corp_id, corp=None, blue=False):
+    def __init__(self, corp_id, start_of_month, start_of_next_month, corp=None):
         if corp:
             self.corp = corp
         else:
-           self.corp = EveCorporationInfo.objects.get(corporation_id=corp_id)
-        self.n_fats = 0
-        self.blue = blue
+            self.corp = EveCorporationInfo.objects.get(corporation_id=corp_id)
+        self.n_fats = Fat.objects.filter(character__corporation_id=self.corp.corporation_id).filter(
+            fatlink__fatdatetime__gte=start_of_month).filter(fatlink__fatdatetime__lte=start_of_next_month).count()
+        self.blue = self.corp.is_blue
 
     def avg_fat(self):
-        return "%.2f" % (float(self.n_fats)/float(self.corp.member_count))
+        return "%.2f" % (float(self.n_fats) / float(self.corp.member_count))
+
 
 def first_day_of_next_month(year, month):
     if month == 12:
-        return datetime.datetime(year+1,1,1)
+        return datetime.datetime(year + 1, 1, 1)
     else:
-        return datetime.datetime(year, month+1, 1)
+        return datetime.datetime(year, month + 1, 1)
+
 
 def first_day_of_previous_month(year, month):
     if month == 1:
-        return datetime.datetime(year-1,12,1)
+        return datetime.datetime(year - 1, 12, 1)
     else:
-        return datetime.datetime(year, month-1, 1)
+        return datetime.datetime(year, month - 1, 1)
 
 
 @login_required
@@ -63,14 +78,14 @@ def fatlink_view(request):
     logger.debug("fatlink_view called by user %s" % request.user)
 
     latest_fats = Fat.objects.filter(user=user).order_by('-id')[:5]
-    if check_if_user_has_permission(user, 'fleetactivitytracking'):
+    if user.has_perm('auth.fleetactivitytracking'):
         latest_links = Fatlink.objects.all().order_by('-id')[:5]
-        context = {'user':user, 'fats': latest_fats, 'fatlinks': latest_links}
+        context = {'user': user, 'fats': latest_fats, 'fatlinks': latest_links}
 
     else:
-        context = {'user':user, 'fats': latest_fats}
+        context = {'user': user, 'fats': latest_fats}
 
-    return render_to_response('registered/fatlinkview.html', context, context_instance=RequestContext(request))
+    return render(request, 'fleetactivitytracking/fatlinkview.html', context=context)
 
 
 @login_required
@@ -82,39 +97,42 @@ def fatlink_statistics_view(request, year=datetime.date.today().year, month=date
     start_of_next_month = first_day_of_next_month(year, month)
     start_of_previous_month = first_day_of_previous_month(year, month)
 
-    fatStats = OrderedDict()
+    fat_stats = {}
 
-    if settings.IS_CORP:
-        fatStats[settings.CORP_NAME] = CorpStat(settings.CORP_ID)
-    else:
-        alliance_corps = EveCorporationInfo.objects.filter(alliance__alliance_id=settings.ALLIANCE_ID)
+    # get FAT stats for member corps
+    for corp_id in settings.STR_CORP_IDS:
+        fat_stats[corp_id] = CorpStat(corp_id, start_of_month, start_of_next_month)
+    for alliance_id in settings.STR_ALLIANCE_IDS:
+        alliance_corps = EveCorporationInfo.objects.filter(alliance__alliance_id=alliance_id)
         for corp in alliance_corps:
-            fatStats[corp.corporation_name] = CorpStat(corp.corporation_id, corp=corp)
+            fat_stats[corp.corporation_id] = CorpStat(corp.corporation_id, start_of_month, start_of_next_month)
 
-    fatlinks_in_span = Fatlink.objects.filter(fatdatetime__gte = start_of_month).filter(fatdatetime__lt = start_of_next_month)
+    # get FAT stats for corps not in alliance
+    fats_in_span = Fat.objects.filter(fatlink__fatdatetime__gte=start_of_month).filter(
+        fatlink__fatdatetime__lt=start_of_next_month).exclude(character__corporation_id__in=fat_stats)
 
-    for fatlink in fatlinks_in_span:
-        fats_in_fatlink = Fat.objects.filter(fatlink=fatlink)
-        for fat in fats_in_fatlink:
-            fatStats.setdefault(fat.character.corporation_name,
-                                CorpStat(fat.character.corporation_id, blue=True)
-                                ).n_fats += 1
+    for fat in fats_in_span:
+        if fat.character.corporation_id not in fat_stats:
+            fat_stats[fat.character.corporation_id] = CorpStat(fat.character.corporation_id, start_of_month,
+                                                               start_of_next_month)
 
-    fatStatsList = [fatStat for corp_name, fatStat in fatStats.items()]
-    fatStatsList.sort(key=lambda stat: stat.corp.corporation_name)
-    fatStatsList.sort(key=lambda stat: (stat.n_fats, stat.n_fats/stat.corp.member_count), reverse=True)
+    # collect and sort stats
+    stat_list = [fat_stats[x] for x in fat_stats]
+    stat_list.sort(key=lambda stat: stat.corp.corporation_name)
+    stat_list.sort(key=lambda stat: (stat.n_fats, stat.n_fats / stat.corp.member_count), reverse=True)
 
     if datetime.datetime.now() > start_of_next_month:
-        context = {'fatStats':fatStatsList, 'month':start_of_month.strftime("%B"), 'year':year, 'previous_month': start_of_previous_month,'next_month': start_of_next_month}
+        context = {'fatStats': stat_list, 'month': start_of_month.strftime("%B"), 'year': year,
+                   'previous_month': start_of_previous_month, 'next_month': start_of_next_month}
     else:
-        context = {'fatStats':fatStatsList, 'month':start_of_month.strftime("%B"), 'year':year, 'previous_month': start_of_previous_month}
+        context = {'fatStats': stat_list, 'month': start_of_month.strftime("%B"), 'year': year,
+                   'previous_month': start_of_previous_month}
 
-    return render_to_response('registered/fatlinkstatisticsview.html', context, context_instance=RequestContext(request))
-
+    return render(request, 'fleetactivitytracking/fatlinkstatisticsview.html', context=context)
 
 
 @login_required
-def fatlink_personal_statistics_view(request, year=datetime.date.today().year, main_name=None):
+def fatlink_personal_statistics_view(request, year=datetime.date.today().year):
     year = int(year)
     logger.debug("Personal statistics view for year %i called by %s" % (year, request.user))
 
@@ -123,21 +141,22 @@ def fatlink_personal_statistics_view(request, year=datetime.date.today().year, m
 
     personal_fats = Fat.objects.filter(user=user).order_by('id')
 
-    monthlystats = [0 for month in range(1,13)]
+    monthlystats = [0 for month in range(1, 13)]
 
     for fat in personal_fats:
         fatdate = fat.fatlink.fatdatetime
         if fatdate.year == year:
-            monthlystats[fatdate.month-1] += 1
+            monthlystats[fatdate.month - 1] += 1
 
-    monthlystats = [(i+1, datetime.date(year, i+1, 1).strftime("%h"), monthlystats[i]) for i in range(12)]
+    monthlystats = [(i + 1, datetime.date(year, i + 1, 1).strftime("%h"), monthlystats[i]) for i in range(12)]
 
-    if datetime.datetime.now() > datetime.datetime(year+1, 1, 1):
-        context = {'user':user, 'monthlystats': monthlystats, 'year':year, 'previous_year':year-1, 'next_year':year+1}
+    if datetime.datetime.now() > datetime.datetime(year + 1, 1, 1):
+        context = {'user': user, 'monthlystats': monthlystats, 'year': year, 'previous_year': year - 1,
+                   'next_year': year + 1}
     else:
-        context = {'user':user, 'monthlystats': monthlystats, 'year':year, 'previous_year':year-1}
+        context = {'user': user, 'monthlystats': monthlystats, 'year': year, 'previous_year': year - 1}
 
-    return render_to_response('registered/fatlinkpersonalstatisticsview.html', context, context_instance=RequestContext(request))
+    return render(request, 'fleetactivitytracking/fatlinkpersonalstatisticsview.html', context=context)
 
 
 @login_required
@@ -148,77 +167,89 @@ def fatlink_monthly_personal_statistics_view(request, year, month, char_id=None)
     start_of_next_month = first_day_of_next_month(year, month)
     start_of_previous_month = first_day_of_previous_month(year, month)
 
-    if check_if_user_has_permission(request.user, 'fleetactivitytracking_statistics') and char_id:
+    if request.user.has_perm('auth.fleetactivitytracking_statistics') and char_id:
         user = EveCharacter.objects.get(character_id=char_id).user
     else:
         user = request.user
     logger.debug("Personal monthly statistics view for user %s called by %s" % (user, request.user))
 
-    personal_fats = Fat.objects.filter(user=user).filter(fatlink__fatdatetime__gte = start_of_month).filter(fatlink__fatdatetime__lt = start_of_next_month)
+    personal_fats = Fat.objects.filter(user=user).filter(fatlink__fatdatetime__gte=start_of_month).filter(
+        fatlink__fatdatetime__lt=start_of_next_month)
 
     ship_statistics = dict()
     n_fats = 0
     for fat in personal_fats:
         ship_statistics[fat.shiptype] = ship_statistics.setdefault(fat.shiptype, 0) + 1
         n_fats += 1
-    context = {'user': user, 'shipStats':sorted(ship_statistics.items()), 'month':start_of_month.strftime("%h"),
-               'year':year, 'n_fats': n_fats, 'char_id': char_id, 'previous_month': start_of_previous_month,
+    context = {'user': user, 'shipStats': sorted(ship_statistics.items()), 'month': start_of_month.strftime("%h"),
+               'year': year, 'n_fats': n_fats, 'char_id': char_id, 'previous_month': start_of_previous_month,
                'next_month': start_of_next_month}
 
-    created_fats = Fatlink.objects.filter(creator=user).filter(fatdatetime__gte = start_of_month).filter(fatdatetime__lt = start_of_next_month)
+    created_fats = Fatlink.objects.filter(creator=user).filter(fatdatetime__gte=start_of_month).filter(
+        fatdatetime__lt=start_of_next_month)
     context["created_fats"] = created_fats
     context["n_created_fats"] = len(created_fats)
 
-    return render_to_response('registered/fatlinkpersonalmonthlystatisticsview.html', context, context_instance=RequestContext(request))
+    return render(request, 'fleetactivitytracking/fatlinkpersonalmonthlystatisticsview.html', context=context)
 
 
 @login_required
-def click_fatlink_view(request, hash, fatname):
-    # Take IG-header data and register the fatlink if not existing already.
-    # use obj, created = Fat.objects.get_or_create()
-    # onload="CCPEVE.requestTrust('http://www.mywebsite.com')"
+@token_required(
+    scopes=['esi-location.read_location.v1', 'esi-location.read_ship_type.v1', 'esi-universe.read_structures.v1'])
+def click_fatlink_view(request, token, hash, fatname):
+    try:
+        fatlink = Fatlink.objects.filter(hash=hash)[0]
 
-    if 'HTTP_EVE_TRUSTED' in request.META and request.META['HTTP_EVE_TRUSTED'] == "Yes":
-        # Retrieve the latest fatlink using the hash.
-        try:
-            fatlink = Fatlink.objects.filter(hash=hash)[0]
-            valid = True
+        if (timezone.now() - fatlink.fatdatetime) < datetime.timedelta(seconds=(fatlink.duration * 60)):
 
-            if (timezone.now() - fatlink.fatdatetime) < datetime.timedelta(seconds=(fatlink.duration*60)):
-                active = True
+            character = EveManager.get_character_by_id(token.character_id)
 
-                character = EveManager.get_character_by_id(request.META['HTTP_EVE_CHARID'])
-
-                if character:
-                    fat = Fat()
-                    fat.system = request.META['HTTP_EVE_SOLARSYSTEMNAME']
-                    if 'HTTP_EVE_STATIONNAME' in request.META:
-                        fat.station = request.META['HTTP_EVE_STATIONNAME']
-                    else:
-                        fat.station = "No Station"
-                    fat.shiptype = request.META['HTTP_EVE_SHIPTYPENAME']
-                    fat.fatlink = fatlink
-                    fat.character = character
-                    fat.user = character.user
-                    try:
-                        fat.full_clean()
-                        fat.save()
-                        context = {'trusted': True, 'registered': True}
-                    except ValidationError as e:
-                        messages = []
-                        for errorname, message in e.message_dict.items():
-                            messages.append(message[0].decode())
-                        context = {'trusted': True, 'errormessages': messages}
+            if character:
+                # get data
+                c = token.get_esi_client(Location='v1', Universe='v2')
+                location = c.Location.get_characters_character_id_location(character_id=token.character_id).result()
+                ship = c.Location.get_characters_character_id_ship(character_id=token.character_id).result()
+                location['solar_system_name'] = \
+                    c.Universe.get_universe_systems_system_id(system_id=location['solar_system_id']).result()[
+                        'name']
+                if location['station_id']:
+                    location['station_name'] = \
+                        c.Universe.get_universe_stations_station_id(station_id=location['station_id']).result()['name']
+                elif location['structure_id']:
+                    c = token.get_esi_client(Universe='v1')
+                    location['station_name'] = \
+                        c.Universe.get_universe_structures_structure_id(structure_id=location['structure_id']).result()[
+                            'name']
                 else:
-                    context = {'character_id': request.META['HTTP_EVE_CHARID'], 'character_name': request.META['HTTP_EVE_CHARNAME']}
-                    return render_to_response('public/characternotexisting.html', context, context_instance=RequestContext(request))
+                    location['station_name'] = "No Station"
+                ship['ship_type_name'] = EveManager.get_itemtype(ship['ship_type_id']).name
+
+                fat = Fat()
+                fat.system = location['solar_system_name']
+                fat.station = location['station_name']
+                fat.shiptype = ship['ship_type_name']
+                fat.fatlink = fatlink
+                fat.character = character
+                fat.user = character.user
+                try:
+                    fat.full_clean()
+                    fat.save()
+                    messages.success(request, _('Fleet participation registered.'))
+                except ValidationError as e:
+                    err_messages = []
+                    for errorname, message in e.message_dict.items():
+                        err_messages.append(message[0].decode())
+                    messages.error(request, ' '.join(err_messages))
             else:
-                context = {'trusted': True, 'expired': True}
-        except ObjectDoesNotExist:
-            context = {'trusted': True}
-    else:
-        context = {'trusted': False, 'fatname': fatname}
-    return render_to_response('public/clickfatlinkview.html', context, context_instance=RequestContext(request))
+                context = {'character_id': token.character_id,
+                           'character_name': token.character_name}
+                return render(request, 'fleetactivitytracking/characternotexisting.html', context=context)
+        else:
+            messages.error(request, _('FAT link has expired.'))
+    except (ObjectDoesNotExist, KeyError):
+        logger.exception("Failed to process FAT link.")
+        messages.error(request, _('Invalid FAT link.'))
+    return redirect('auth_fatlink_view')
 
 
 @login_required
@@ -237,7 +268,7 @@ def create_fatlink_view(request):
                 fatlink.duration = form.cleaned_data["duration"]
                 fatlink.fatdatetime = timezone.now()
                 fatlink.creator = request.user
-                fatlink.hash = ''.join(random.choice(string.ascii_letters+string.digits) for i in range(10))
+                fatlink.hash = ''.join(random.choice(string.ascii_letters + string.digits) for i in range(10))
                 try:
                     fatlink.full_clean()
                     fatlink.save()
@@ -247,12 +278,12 @@ def create_fatlink_view(request):
                     for errorname, message in e.message_dict.items():
                         messages.append(message[0].decode())
                     context = {'form': form, 'errormessages': messages}
-                    return render_to_response('registered/fatlinkformatter.html', context, context_instance=RequestContext(request))
+                    return render(request, 'fleetactivitytracking/fatlinkformatter.html', context=context)
             else:
                 form = FatlinkForm()
                 context = {'form': form, 'badrequest': True}
-                return render_to_response('registered/fatlinkformatter.html', context, context_instance=RequestContext(request))
-            return HttpResponseRedirect('/fat/')
+                return render(request, 'registered/fatlinkformatter.html', context=context)
+            return redirect('auth_fatlink_view')
 
     else:
         form = FatlinkForm()
@@ -260,7 +291,7 @@ def create_fatlink_view(request):
 
     context = {'form': form}
 
-    return render_to_response('registered/fatlinkformatter.html', context, context_instance=RequestContext(request))
+    return render(request, 'fleetactivitytracking/fatlinkformatter.html', context=context)
 
 
 @login_required
@@ -268,25 +299,26 @@ def create_fatlink_view(request):
 def modify_fatlink_view(request, hash=""):
     logger.debug("modify_fatlink_view called by user %s" % request.user)
     if not hash:
-        return HttpResponseRedirect('/fat/')
+        return redirect('auth_fatlink_view')
 
     fatlink = Fatlink.objects.filter(hash=hash)[0]
 
-    if(request.GET.get('removechar')):
+    if request.GET.get('removechar', None):
         character_id = request.GET.get('removechar')
         character = EveCharacter.objects.get(character_id=character_id)
-        logger.debug("Removing character %s from fleetactivitytracking  %s" % (character.character_name ,fatlink.name))
+        logger.debug("Removing character %s from fleetactivitytracking  %s" % (character.character_name, fatlink.name))
 
         Fat.objects.filter(fatlink=fatlink).filter(character=character).delete()
 
-    if(request.GET.get('deletefat')):
+    if request.GET.get('deletefat', None):
         logger.debug("Removing fleetactivitytracking  %s" % fatlink.name)
         fatlink.delete()
-        return HttpResponseRedirect('/fat/')
+        return redirect('auth_fatlink_view')
 
-    registered_fats = Fat.objects.filter(fatlink=fatlink).order_by('character')
+    registered_fats = Fat.objects.filter(fatlink=fatlink).order_by('character__character_name')
 
-    context = {'fatlink':fatlink, 'registered_fats':registered_fats}
+    fat_page = get_page(registered_fats, request.GET.get('page', 1))
 
-    return render_to_response('registered/fatlinkmodify.html', context, context_instance=RequestContext(request))
+    context = {'fatlink': fatlink, 'registered_fats': fat_page}
 
+    return render(request, 'fleetactivitytracking/fatlinkmodify.html', context=context)

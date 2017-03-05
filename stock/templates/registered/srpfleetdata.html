@@ -16,12 +16,12 @@
                 <div class="text-right">
                     {% if perms.auth.srp_management %}
                         {% if fleet_status == "Completed" %}
-                            <a href="/srp_fleet_mark_uncompleted/{{ fleet_id }}">
-                                <button type="button" class="btn btn-warning">{% trans "Mark Incomplete" %}</button>
+                            <a href="{% url 'auth_srp_fleet_mark_uncompleted' fleet_id %}" class="btn btn-warning">
+                                {% trans "Mark Incomplete" %}
                             </a>
                         {% else %}
-                            <a href="/srp_fleet_mark_completed/{{ fleet_id }}">
-                                <button type="button" class="btn btn-success">{% trans "Mark Completed" %}</button>
+                            <a href="{% url 'auth_srp_fleet_mark_completed' fleet_id %}" class="btn btn-success">
+                                {% trans "Mark Completed" %}
                             </a>
                         {% endif %}
                     {% endif %}
@@ -34,7 +34,8 @@
                     <b>{% trans "Total ISK Cost:" %} {{ totalcost | intcomma }}</b>
                 </div>
             </div>
-            <table class="table table-bordered">
+            {% if srpfleetrequests %}
+            <table class="table">
                 <tr>
                     <th class="text-center">{% trans "Pilot Name" %}</th>
                     <th class="text-center">{% trans "Killboard Link" %}</th>
@@ -50,14 +51,10 @@
                 </tr>
                 {% for srpfleetrequest in srpfleetrequests %}
                     <tr>
-                        <td class="text-center">
-                            <div class="label label-info">
-                                {{ srpfleetrequest.character.character_name }}
-                            </div>
-                        </td>
+                        <td class="text-center">{{ srpfleetrequest.character.character_name }}</td>
                         <td class="text-center">
                             <a href="{{ srpfleetrequest.killboard_link }}"
-                               target="_blank">{{ srpfleetrequest.killboard_link }}</a>
+                               target="_blank" class="label label-warning">Link</a>
                         </td>
                         <td class="text-center">{{ srpfleetrequest.additional_info }}</td>
                         <td class="text-center">{{ srpfleetrequest.srp_ship_name }}</td>
@@ -82,45 +79,29 @@
                         {% if perms.auth.srp_management %}
 
                             <td class="text-center">
-                                <a href="/srp_request_amount_update/{{ srpfleetrequest.id }}">
-                                    <button type="button" class="btn btn-info"><span
-                                            class="glyphicon glyphicon-pencil"></span></button>
+                                <a href="{% url 'auth_srp_request_update_amount_view' srpfleetrequest.id %}" class="btn btn-info" title="Update Value">
+                                    <span class="glyphicon glyphicon-usd"></span>
                                 </a>
-                                {% if srpfleetrequest.srp_status == "Rejected" %}
-                                    <a href="/srp_request_approve/{{ srpfleetrequest.id }}">
-                                    <button type="button" class="btn btn-success"><span
-                                            class="glyphicon glyphicon-ok"></span></button>
-                                    </a>
-                                {% elif srpfleetrequest.srp_status == "Pending" %}
-                                    <a href="/srp_request_approve/{{ srpfleetrequest.id }}">
-                                    <button type="button" class="btn btn-success"><span
-                                            class="glyphicon glyphicon-ok"></span></button>
+                                {% if srpfleetrequest.srp_status in "RejectedPending" %}
+                                    <a href="{% url 'auth_srp_request_approve' srpfleetrequest.id %}" class="btn btn-success" title="Approve">
+                                        <span class="glyphicon glyphicon-ok"></span>
                                     </a>
                                 {% elif srpfleetrequest.srp_status == "" %}
-                                    <a href="/srp_request_approve/{{ srpfleetrequest.id }}">
-                                    <button type="button" class="btn btn-success"><span
-                                            class="glyphicon glyphicon-ok"></span></button>
+                                    <a href="{% url 'auth_srp_request_approve' srpfleetrequest.id %}" class="btn btn-success" title="Approve">
+                                        <span class="glyphicon glyphicon-ok"></span>
                                     </a>
                                 {% endif %}
-                                {% if srpfleetrequest.srp_status == "Approved" %}
-                                    <a href="/srp_request_reject/{{ srpfleetrequest.id }}">
-                                    <button type="button" class="btn btn-warning"><span
-                                            class="glyphicon glyphicon-remove"></span></button>
-                                    </a>
-                                {% elif srpfleetrequest.srp_status == "Pending" %}
-                                    <a href="/srp_request_reject/{{ srpfleetrequest.id }}">
-                                    <button type="button" class="btn btn-warning"><span
-                                            class="glyphicon glyphicon-remove"></span></button>
+                                {% if srpfleetrequest.srp_status in "ApprovedPending" %}
+                                    <a href="{% url 'auth_srp_request_reject' srpfleetrequest.id %}" class="btn btn-warning" title="Reject">
+                                        <span class="glyphicon glyphicon-remove"></span>
                                     </a>
                                 {% elif srpfleetrequest.srp_status == "" %}
-                                    <a href="/srp_request_reject/{{ srpfleetrequest.id }}">
-                                    <button type="button" class="btn btn-warning"><span
-                                            class="glyphicon glyphicon-remove"></span></button>
+                                    <a href="{% url 'auth_srp_request_reject' srpfleetrequest.id %}" class="btn btn-warning" title="Reject">
+                                        <span class="glyphicon glyphicon-remove"></span>
                                     </a>
                                 {% endif %}
-                                <a href="/srp_request_remove/{{ srpfleetrequest.id }}">
-                                    <button type="button" class="btn btn-danger"><span
-                                            class="glyphicon glyphicon-trash"></span></button>
+                                <a href="{% url 'auth_srp_request_remove' srpfleetrequest.id %}" class="btn btn-danger" title="Remove">
+                                        <span class="glyphicon glyphicon-trash"></span>
                                 </a>
 
                             </td>
@@ -128,6 +109,9 @@
                     </tr>
                 {% endfor %}
             </table>
+            {% else %}
+            <div class="alert alert-warning text-center">{% trans "No SRP requests for this fleet." %}</div>
+            {% endif %}
         </div>
     </div>
 

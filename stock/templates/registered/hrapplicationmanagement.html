@@ -10,7 +10,7 @@
 
 {% block content %}
     <div class="col-lg-12">
-        {% if not perms.auth.member %}
+        {% if not STATE == MEMBER_STATE %}
             <h1 class="page-header text-center">{% trans "Personal Applications" %}
                 <div class="text-right">
                     {% if create %}
@@ -20,7 +20,8 @@
                     {% endif %}
                 </div>
             </h1>
-            <table class="table table-bordered table-condensed">
+            {% if personal_apps %}
+            <table class="table table-condensed">
                 <tr>
                     <th class="text-center">{% trans "Username" %}</th>
                     <th class="text-center">{% trans "Corporation" %}
@@ -41,21 +42,20 @@
                             {% endif %}
                         </td>
                         <td class="text-center">
-                            <a href="/hr_application_personal_view/{{ personal_app.id }}">
-                                <button type="button" class="btn btn-primary"><span
-                                        class="glyphicon glyphicon-eye-open"></span></button>
+                            <a href="{% url 'auth_hrapplication_personal_view' personal_app.id %}"class="btn btn-primary">
+                                <span class="glyphicon glyphicon-eye-open"></span>
                             </a>
 
                             {% if personal_app.approved == None %}
-                                <a href="/hr_application_personal_removal/{{ personal_app.id }}">
-                                    <button type="button" class="btn btn-danger"><span
-                                            class="glyphicon glyphicon-remove"></span></button>
+                                <a href="{% url 'auth_hrapplication_personal_removal' personal_app.id %}" class="btn btn-danger">
+                                    <span class="glyphicon glyphicon-remove"></span>
                                 </a>
                             {% endif %}
                         </td>
                     </tr>
                 {% endfor %}
             </table>
+            {% endif %}
         {% endif %}
         {% if perms.auth.human_resources %}
             <h1 class="page-header text-center">{% trans "Application Management" %}
@@ -73,6 +73,7 @@
             <div class="tab-content">
                 <div id="pending" class="tab-pane fade in active">
                     <div class="panel-body">
+                        {% if applications %}
                         <table class="table">
                             <tr>
                                 <th class="text-center">{% trans "Date" %}</th>
@@ -89,31 +90,34 @@
                                     <td class="text-center">{{ app.main_character }}</td>
                                     <td class="text-center">{{ app.form.corp.corporation_name }}</td>
                                     <td class="text-center">
-                                        {% if app.approved_denied == None %}
+                                        {% if app.approved == None %}
                                             {% if app.reviewer_str %}
                                                 <div class="label label-info">{% trans "Reviewer:" %} {{ app.reviewer_str }}</div>
                                             {% else %}
                                                 <div class="label label-warning">{% trans "Pending" %}</div>
                                             {% endif %}
-                                        {% elif  app.approved_denied == True %}
+                                        {% elif  app.approved == True %}
                                             <div class="label label-success">{% trans "Approved" %}</div>
                                         {% else %}
                                             <div class="label label-danger">{% trans "Rejected" %}</div>
                                         {% endif %}
                                     </td>
                                     <td class="text-center">
-                                        <a href="/hr_application_view/{{ app.id }}">
-                                            <button type="button" class="btn btn-primary"><span
-                                                    class="glyphicon glyphicon-eye-open"></span></button>
+                                        <a href="{% url 'auth_hrapplication_view' app.id %}" class="btn btn-primary">
+                                            <span class="glyphicon glyphicon-eye-open"></span>
                                         </a>
                                     </td>
                                 </tr>
                             {% endfor %}
                         </table>
+                        {% else %}
+                        <div class="alert alert-warning text-center">{% trans "No pending applications." %}</div>
+                        {% endif %}
                     </div>
                 </div>
                 <div id="reviewed" class="tab-pane fade">
                     <div class="panel-body">
+                        {% if finished_applications %}
                         <table class="table">
                             <tr>
                                 <th class="text-center">{% trans "Date" %}</th>
@@ -130,27 +134,29 @@
                                     <td class="text-center">{{ app.main_character }}</td>
                                     <td class="text-center">{{ app.form.corp.corporation_name }}</td>
                                     <td class="text-center">
-                                        {% if app.approved_denied == None %}
+                                        {% if app.approved == None %}
                                             {% if app.reviewer_str %}
                                                 <div class="label label-info">{% trans "Reviewer:" %} {{ app.reviewer_str }}</div>
                                             {% else %}
                                                 <div class="label label-warning">{% trans "Pending" %}</div>
                                             {% endif %}
-                                        {% elif  app.approved_denied == True %}
+                                        {% elif  app.approved == True %}
                                             <div class="label label-success">{% trans "Approved" %}</div>
                                         {% else %}
                                             <div class="label label-danger">{% trans "Rejected" %}</div>
                                         {% endif %}
                                     </td>
                                     <td class="text-center">
-                                        <a href="/hr_application_view/{{ app.id }}">
-                                            <button type="button" class="btn btn-primary"><span
-                                                    class="glyphicon glyphicon-eye-open"></span></button>
+                                        <a href="{% url 'auth_hrapplication_view' app.id %}" class="btn btn-primary">
+                                            <span class="glyphicon glyphicon-eye-open"></span>
                                         </a>
                                     </td>
                                 </tr>
                             {% endfor %}
                         </table>
+                        {% else %}
+                        <div class="alert alert-warning text-center">{% trans "No reviewed applications." %}</div>
+                        {% endif %}
                     </div>
                 </div>
             </div>

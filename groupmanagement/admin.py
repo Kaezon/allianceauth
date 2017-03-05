@@ -1,12 +1,15 @@
+from __future__ import unicode_literals
 from django.contrib import admin
 
-from models import GroupDescription
-from models import GroupRequest
-from models import HiddenGroup
-from models import OpenGroup
+from groupmanagement.models import GroupRequest
+from groupmanagement.models import AuthGroup
 
 
-admin.site.register(GroupDescription)
+class AuthGroupAdmin(admin.ModelAdmin):
+    """
+    Admin model for AuthGroup
+    """
+    filter_horizontal = ('group_leaders',)
+
 admin.site.register(GroupRequest)
-admin.site.register(HiddenGroup)
-admin.site.register(OpenGroup)
+admin.site.register(AuthGroup, AuthGroupAdmin)
