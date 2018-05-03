@@ -1,37 +1,57 @@
 # Alliance Market
 
-Add `services.modules.market` to your `INSTALLED_APPS` list and run migrations before continuing with this guide to ensure the service is installed.
+## Dependencies
+Alliance Market requires PHP installed in your web server. Apache has `mod_php`, NGINX requires `php-fpm`.
 
-Alliance Market needs a database. Create one in mysql. Default name is `alliance_market`:
+## Prepare Your Settings
+In your auth project's settings file, do the following:
+ - Add `'allianceauth.services.modules.market',` to your `INSTALLED_APPS` list
+ - Append the following to the bottom of the settings file
+
+
+    # Alliance Market
+    MARKET_URL = ''
+    DATABASES['market'] = {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'alliance_market',
+        'USER': 'allianceserver-market',
+        'PASSWORD': 'password',
+        'HOST': '127.0.0.1',
+        'PORT': '3306',
+    }
+
+## Setup Alliance Market
+Alliance Market needs a database. Create one in MySQL/MariaDB. Default name is `alliance_market`:
 
     mysql -u root -p
     create database alliance_market;
+    grant all privileges on alliance_market . * to 'allianceserver'@'localhost';
     exit;
 
-To clone the repo, install packages:
+Install required packages to clone the repository:
 
-    sudo apt-get install mercurial meld
+    apt-get install mercurial meld
 
 Change to the web folder:
 
     cd /var/www
 
-Now clone the repo
+Now clone the repository
 
-    sudo hg clone https://bitbucket.org/krojew/evernus-alliance-market
+    hg clone https://bitbucket.org/krojew/evernus-alliance-market
 
 Make cache and log directories
 
-    sudo mkdir evernus-alliance-market/app/cache
-    sudo mkdir evernus-alliance-market/app/logs
-    sudo chmod -R 777 evernus-alliance-market/app/cache
-    sudo chmod -R 777 evernus-alliance-market/app/logs
+    mkdir evernus-alliance-market/app/cache
+    mkdir evernus-alliance-market/app/logs
+    chmod -R 777 evernus-alliance-market/app/cache
+    chmod -R 777 evernus-alliance-market/app/logs
 
 Change ownership to apache
 
-    sudo chown -R www-data:www-data evernus-alliance-market
+    chown -R www-data:www-data evernus-alliance-market
 
-Enter
+Enter directory
 
     cd evernus-alliance-market
 
@@ -41,13 +61,13 @@ Set environment variable
 
 Copy configuration
 
-    sudo cp app/config/parameters.yml.dist  app/config/parameters.yml
+    cp app/config/parameters.yml.dist  app/config/parameters.yml
 
 Edit, changing the following:
  - `database_name` to `alliance_market`
  - `database_user` to your MySQL user (usually `allianceserver`)
  - `database_password` to your MySQL user password
- - email settings, eg gmail
+ - email settings, eg Gmail/Mailgun etc.
 
 Edit `app/config/config.yml` and add the following:
 
@@ -59,48 +79,83 @@ Install composer [as per these instructions.](https://getcomposer.org/download/)
 
 Update dependencies.
 
-    sudo php composer.phar update --optimize-autoloader
+    php composer.phar update --optimize-autoloader
 
 Prepare the cache:
 
-    sudo php app/console cache:clear --env=prod --no-debug
+    php app/console cache:clear --env=prod --no-debug
 
 
 Dump assets:
 
-    sudo php app/console assetic:dump --env=prod --no-debug
+    php app/console assetic:dump --env=prod --no-debug
 
 
 Create DB entries
 
-    sudo php app/console doctrine:schema:update --force
+    php app/console doctrine:schema:update --force
 
 Install SDE:
 
-    sudo php app/console evernus:update:sde
+    php app/console evernus:update:sde
 
-Edit your apache config. Add the following:
+Configure your web server to serve alliance market.
 
-    Alias /market /var/www/evernus-alliance-market/web/
+A minimal Apache config might look like:
 
-    <Directory "/var/www/evernus-alliance-market/web/">
-        DirectoryIndex app.php
-        Require all granted
-        AllowOverride all
-    </Directory>
+    <VirtualHost *:80>
+        ServerName market.example.com
+        DocumentRoot /var/www/evernus-alliance-market/web
+        <Directory "/var/www/evernus-alliance-market/web/">
+            DirectoryIndex app.php
+            Require all granted
+            AllowOverride all
+        </Directory>
+    </VirtualHost>
 
-Enable rewriting
+A minimal Nginx config might look like:
 
-    sudo a2enmod rewrite
+    server {
+        listen 80;
+        server_name  market.example.com;
+        root   /var/www/evernus-alliance-market/web;
+        index  app.php;
+        access_log  /var/logs/market.access.log;
 
-Restart apache
-
-    sudo service apache2 reload
+        # strip app.php/ prefix if it is present
+        rewrite ^/app\.php/?(.*)$ /$1 permanent;
+    
+        location / {
+            index app.php;
+            try_files $uri @rewriteapp;
+        }
+    
+        location @rewriteapp {
+            rewrite ^(.*)$ /app.php/$1 last;
+        }
+    
+        # pass the PHP scripts to FastCGI server from upstream phpfcgi
+        location ~ ^/(app|app_dev|config)\.php(/|$) {
+            fastcgi_pass 127.0.0.1:9000;
+            fastcgi_split_path_info ^(.+\.php)(/.*)$;
+            include fastcgi_params;
+            fastcgi_param  SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            fastcgi_param  HTTPS off;
+        }
+    
+        location ~ /\.ht {
+            deny all;
+        }
+    }
 
 Once again, set cache permissions:
 
-    sudo chown -R www-data:www-data app/
+    chown -R www-data:www-data app/
 
 Add a user account through auth, then make it a superuser:
 
-    sudo php app/console fos:user:promote your_username --super
+    php app/console fos:user:promote your_username --super
+
+Now edit your auth project's settings file and fill in the web URL to your market as well as the database details.
+
+Finally run migrations and restart Gunicorn and Celery.

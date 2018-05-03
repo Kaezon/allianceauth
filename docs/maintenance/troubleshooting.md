@@ -2,48 +2,51 @@
 
 ## Something broken? Stuck on an issue? Can't get it set up?
 
-Start here:
- - check the [issues](https://github.com/allianceauth/allianceauth/issues?utf8=%E2%9C%93&q=is%3Aissue) - especially closed ones
- - check the [forums](https://forums.eveonline.com/default.aspx?g=posts&t=383030)
+Start by checking the [issues](https://github.com/allianceauth/allianceauth/issues?q=is%3Aissue) - especially closed ones.
 
 No answer?
  - open an [issue](https://github.com/allianceauth/allianceauth/issues)
  - harass us on [gitter](https://gitter.im/R4stl1n/allianceauth)
- - post to the [forums](https://forums.eveonline.com/default.aspx?g=posts&t=383030)
+ 
+## Logging
+
+In its default configuration your auth project logs INFO and above messages to myauth/log/allianceauth.log. If you're encountering issues it's a good idea to view DEBUG messages as these greatly assist the troubleshooting process. These are printed to the console with manually starting the webserver via `python manage.py runserver`.
+
+To record DEBUG messages in the log file, alter a setting in your auth project's settings file: `LOGGING['handlers']['log_file']['level'] = 'DEBUG'`. After restarting gunicorn and celery your log file will record all logging messages. 
 
 ## Common Problems
 
-### `pip install -r requirements.txt` is failing
-
-Either you need to `sudo` that command, or it's a missing dependency. Check [the list](../installation/auth/dependencies.md), reinstall, and try again.
-
 ### I'm getting an error 500 trying to connect to the website on a new install
 
-Read the apache error log: `sudo nano /var/log/apache2/error.log`
-
-If it talks about failing to import something, google its name and install it.
-
-If it whines about being unable to configure logger, see below. 
+*Great.* Error 500 is the generic message given by your web server when *anything* breaks. The actual error message is hidden in one of your auth project's log files. Read them to identify it.
 
 ### Failed to configure log handler
 
-Make sure the log directory is write-able: `chmod -R 777 /home/allianceserver/allianceauth/log`, then reload apache/celery/supervisor/etc.
+Make sure the log directory is writeable by the allianceserver user: `chmown -R allianceserver:allianceserver /path/to/myauth/log/`, then restart the auth supervisor processes.
 
 ### Groups aren't syncing to services
 
-Make sure the background processes are running: `ps aux | grep celery` should return more than 1 line. More lines if you have more cores on your server's processor. If there are more than two lines starting with `SCREEN`, kill all of them with `kill #` where `#` is the process ID (second column), then restart with [these background process commands](../installation/auth/quickstart.md) from the allianceauth directory. You can't start these commands as root.
+Make sure the background processes are running: `supervisorctl status myauth:`. If `myauth:worker` or `myauth:beat` do not show `RUNNING` read their log files to identify why.
 
-If that doesn't do it, try clearing the worker queue. First kill all celery processes as described above, then do the following:
+### Task queue is way too large
+
+Stop celery workers with `supervisorctl stop myauth:worker` then clear the queue:
 
     redis-cli FLUSHALL
-    python manage.py celeryd --purge
+    celery -A myauth worker --purge
 
-Press control+C once.
+Press Control+C once.
 
-    python manage.py celeryd --discard
+Now start the worker again with `supervisorctl start myauth:worker`
 
-Press control+C once.
+### Proxy timeout when entering email address
 
-Now start celery again with [these background process commands.](../installation/auth/quickstart.md)
+This usually indicates an issue with your email settings. Ensure these are correct and your email server/service is properly configured.
 
-While debugging, it is useful to see if tasks are being executed. The easiest tool is [flower](http://flower.readthedocs.io/). Install it with this: `sudo pip install flower`, then start it with this: `celery flower --broker=amqp://guest:guest@localhost:5672//`. To view the status, navigate to your server IP, port 5555.
+### No images are available to users accessing the website
+
+This is likely due to a permissions mismatch. Check the setup guide for your web server. Additionally ensure the user who owns `/var/www/myauth/static` is the same user as running your webserver, as this can be non-standard.
+
+### Unable to execute 'gunicorn myauth.wsgi' or ImportError: No module named 'myauth.wsgi'
+
+Gunicorn needs to have context for its running location, `/home/alllianceserver/myauth/gunicorn myauth.wsgi` will not work, instead `cd /home/alllianceserver/myauth` then `gunicorn myauth.wsgi` is needed to boot Gunicorn. This is handled in the Supervisor config, but this may be encountered running Gunicorn manually for testing.

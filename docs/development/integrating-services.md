@@ -1,6 +1,6 @@
 # Integrating Services
 
-One of the primary roles of Alliance Auth is integrating with external services in order to authenticate and manage users. This is achieved through the use of service modules. 
+One of the primary roles of Alliance Auth is integrating with external services in order to authenticate and manage users. This is achieved through the use of service modules.
 
 ## The Service Module
 
@@ -29,8 +29,8 @@ The architecture looks something like this:
            |
            |
       AllianceAuth
-      
-      
+
+
       Where:
          Module --▶ Dependency/Import
 
@@ -46,10 +46,10 @@ In order to integrate with Alliance Auth service modules must provide a `service
 
 This would register the ExampleService class which would need to be a subclass of `services.hooks.ServiceHook`.
 
-        
+
 ```eval_rst
 .. important::
-    The hook **MUST** be registered in `yourservice.auth_hooks` along with any other hooks you are registering for Alliance Auth.
+    The hook **MUST** be registered in ``yourservice.auth_hooks`` along with any other hooks you are registering for Alliance Auth.
 ```
 
 
@@ -97,7 +97,7 @@ Functions:
 Internal name of the module, should be unique amongst modules.
 
 #### self.urlpatterns
-You should define all of your service urls internally, usually in `urls.py`. Then you can import them and set `self.urlpatterns` to your defined urlpatterns. 
+You should define all of your service URLs internally, usually in `urls.py`. Then you can import them and set `self.urlpatterns` to your defined urlpatterns. 
 
     from . import urls
     ...
@@ -105,7 +105,7 @@ You should define all of your service urls internally, usually in `urls.py`. The
         def __init__(self):
             ...
             self.urlpatterns = urls.urlpatterns
-            
+
 All of your apps defined urlpatterns will then be included in the `URLconf` when the core application starts.
 
 #### self.service_ctrl_template
@@ -147,7 +147,7 @@ If this function is defined, an admin action will be registered on the Django Us
 #### update_groups
 `def update_groups(self, user):`
 
-Update the users group membership. The `user` parameter should be a Django User object. 
+Update the users group membership. The `user` parameter should be a Django User object.
 When this is called the service should determine the groups the user is a member of and synchronise the group membership with the external service. If you service does not support groups then you are not required to define this.
 
 If this function is defined, an admin action will be registered on the Django Users view, allowing admins to manually trigger this action for one or many users. The hook will trigger this action user by user, so you won't have to manage a list of users.
@@ -161,49 +161,12 @@ The service should iterate through all of its recorded users and update their gr
 
 I'm really not sure when this is called, it may have been a hold over from before signals started to be used. Regardless, it can be useful to server admins who may call this from a Django shell to force a synchronisation of all user groups for a specific service.
 
-#### service_enabled_members
-`def service_enabled_members(self):`
-
-Is this service enabled for users with the `Member` state? It should return `True` if the service is enabled for Members, and `False` otherwise. The default is `False`.
-
-An implementation will usually look like:
-
-    def service_enabled_members(self):
-        return settings.ENABLE_AUTH_EXAMPLE or False
-        
-        
-```eval_rst
-.. note::
-    There has been discussion about moving services to permissions based access. You should review `Issue #663 <https://github.com/allianceauth/allianceauth/issues/663/>`_.
-```
-
-#### service_enabled_blues
-`def service_enabled_blues(self):`
-
-Is this service enabled for users with the `Blue` state? It should return `True` if the service is enabled for Blues, and `False` otherwise. The default is `False`.
-
-An implementation will usually look like:
-
-    def service_enabled_blues(self):
-        return settings.ENABLE_BLUE_EXAMPLE or False
-        
-        
-```eval_rst
-.. note::
-    There has been discussion about moving services to permissions based access. You should review `Issue #663 <https://github.com/allianceauth/allianceauth/issues/663/>`_.
-```
-
 #### service_active_for_user
 `def service_active_for_user(self, user):`
 
 Is this service active for the given user? The `user` parameter should be a Django User object.
 
 Usually you wont need to override this as it calls `service_enabled_members` or `service_enabled_blues` depending on the users state.
-
-```eval_rst
-.. note::
-    There has been discussion about moving services to permissions based access. You should review `Issue #663 <https://github.com/allianceauth/allianceauth/issues/663/>`_ as this function will likely need to be defined by each service to check its permission.
-```
 
 #### show_service_ctrl
 `def show_service_ctrl(self, user, state):`
@@ -213,7 +176,7 @@ Should the service be shown for the given `user` with the given `state`? The `us
 Usually you wont need to override this function.
 
 For more information see the [render_service_ctrl](#render-service-ctrl) section.
- 
+
 #### render_service_ctrl
 `def render_services_ctrl(self, request):`
 
@@ -258,7 +221,7 @@ Most services will survive with the default template. If, however, you require e
 
 If you services needs cannot be satisfied by the Service Control row, you are free to specify extra hooks by subclassing or instantiating the `services.hooks.MenuItemHook` class.
 
-For more information see the [Menu Hooks](menu-hooks.md) page. 
+For more information see the [Menu Hooks](menu-hooks.md) page.
 
 ### The Service Manager
 
